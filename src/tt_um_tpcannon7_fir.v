@@ -31,11 +31,10 @@ module tt_um_tpcannon7_fir (
       .din(ui_in),
       .dout(uo_out),
       .out_valid(uio_out[0]),
-      .tap_sel(uio_in[4:2]),
       .load(uio_in[1])
   );
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{uio_in[7:5], uio_in[0], 1'b0};
+  wire _unused = &{uio_in[7:2], uio_in[0], 1'b0};
 
 endmodule

@@ -9,7 +9,6 @@ module fir_filter #(
     input wire ena,
     input wire rst_n,
     input wire signed [SampleWidth-1:0] din,
-    input wire [$clog2(Taps)-1:0] tap_sel,
     input wire load,
 
     output wire signed [SampleWidth-1:0] dout,
@@ -17,6 +16,8 @@ module fir_filter #(
 );
 
   localparam OutWidth = SampleWidth + CoeffWidth + $clog2(Taps);
+
+  assign out_valid = (curr_st == Compute);
 
   localparam [1:0] Idle = 2'b00, Load = 2'b01, Compute = 2'b10;
   reg [1:0] curr_st, next_st;
@@ -66,6 +67,21 @@ module fir_filter #(
   reg signed [OutWidth-1:0] out_full;
   reg signed [CoeffWidth-1:0] coeff[0:Taps-1];
 
+  // TODO: change laterto allow loading of high-low bytes for 16 bit samples
+  // 0 LSB -> low; 1 LSB -> high
+  // load 16 bit in order from tap 0 -> tap N
+  reg [$clog2(Taps)-1:0] coeff_idx;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      coeff_idx <= 0;
+    end else if (curr_st != Load) begin
+      coeff_idx <= 0;
+    end else begin
+      coeff_idx <= coeff_idx + 1'b1;
+    end
+  end
+
   // load incoming sample
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
@@ -75,13 +91,14 @@ module fir_filter #(
     end
   end
 
+  integer k;
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
-      for (j = 0; j < Taps; j = j + 1) begin
-        coeff[j] <= {CoeffWidth{1'b0}};
+      for (k = 0; k < Taps; k = k + 1) begin
+        coeff[k] <= {CoeffWidth{1'b0}};
       end
     end else if (curr_st == Load) begin
-      coeff[tap_sel] <= din;
+      coeff[coeff_idx] <= din;
     end
   end
 

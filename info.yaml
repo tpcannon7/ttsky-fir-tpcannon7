@@ -46,9 +46,9 @@ pinout:
   # Bidirectional pins
   uio[0]: "out_valid"
   uio[1]: "load_en"
-  uio[2]: "tap_sel[0]"
-  uio[3]: "tap_sel[1]"
-  uio[4]: "tap_sel[2]"
+  uio[2]: ""
+  uio[3]: ""
+  uio[4]: ""
   uio[5]: ""
   uio[6]: ""
   uio[7]: ""
