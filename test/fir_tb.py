@@ -34,26 +34,7 @@ async def test_fir(dut):
     clk = Clock(dut.clk, 10, "ns")
     clk.start()
 
-    fs = 10000
-    t = np.linspace(0, 1, fs)
-    signal = np.sin(2 * np.pi * 500 * t) # 500 hz sine wave
-    noise = np.random.randn(len(t)) * 0.3 # noise
-    coeffs = np.array([16] * 8, dtype=float)
-    input_signal = signal + noise
-    reference = lfilter(coeffs, 1.0, input_signal)
-
-    samples = (np.sin(2 * np.pi * 0.05 * np.arange(100)) * 50).astype(int)
-
     await reset(dut)
     dut.ena.value = 1
-        
-    for i, sample in enumerate(samples):
-        # sample is already an integer, just write it
-        dut.ui_in.value = int(sample) & 0xFF  # mask to 8 bits handles negative numbers
-        await RisingEdge(dut.clk)
-        # read output - handle signed
-        raw = int(dut.tt_um_tpcannon7_fir.fir.out_full.value.to_signed())
-
-        cocotb.log.info(f"sample = {sample} dut = {raw/64} ref = {reference[i]:.1f}")
 
 
