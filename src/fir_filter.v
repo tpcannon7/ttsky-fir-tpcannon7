@@ -6,20 +6,24 @@ module fir_filter #(
     parameter Taps = 8
 ) (
     input wire clk,
-    input wire ena,
     input wire rst_n,
     input wire signed [SampleWidth-1:0] din,
     input wire load,
+    input wire in_valid,
 
     output wire signed [SampleWidth-1:0] dout,
-    output wire out_valid
+    output wire out_valid,
+    output wire in_ready
 );
 
   localparam OutWidth = SampleWidth + CoeffWidth + $clog2(Taps);
 
-  assign out_valid = (curr_st == Compute);
+  /* verilator lint_off WIDTHEXPAND */
+  assign out_valid = (curr_st == Compute) && (mac_idx == Taps - 1);
+  /* verilator lint_on WIDTHEXPAND */
+  assign in_ready  = (curr_st != LoadCoeff) && (mac_idx == 0);
 
-  localparam [1:0] Idle = 2'b00, Load = 2'b01, Compute = 2'b10;
+  localparam [1:0] Idle = 2'b00, LoadCoeff = 2'b01, Compute = 2'b10;
   reg [1:0] curr_st, next_st;
 
   // state machine
@@ -36,21 +40,23 @@ module fir_filter #(
     case (curr_st)
       Idle: begin
         if (load) begin
-          next_st = Load;
+          next_st = LoadCoeff;
+        end else if (in_valid && in_ready && !load) begin
+          next_st = Compute;
         end else begin
           next_st = Idle;
         end
       end
-      Load: begin
+      LoadCoeff: begin
         if (load) begin
-          next_st = Load;
+          next_st = LoadCoeff;
         end else begin
           next_st = Compute;
         end
       end
       Compute: begin
         if (load) begin
-          next_st = Load;
+          next_st = LoadCoeff;
         end else begin
           next_st = Compute;
         end
@@ -61,56 +67,50 @@ module fir_filter #(
     endcase
   end
 
-  reg signed [OutWidth-1:0] output_r;
-  reg signed [SampleWidth-1:0] samples[0:Taps-2];
-  wire signed [(SampleWidth + CoeffWidth)-1:0] taps_out[0:Taps-1];
-  reg signed [OutWidth-1:0] out_full;
+  reg signed [OutWidth-1:0] acc;
+  reg signed [SampleWidth-1:0] samples[0:Taps-1];
   reg signed [CoeffWidth-1:0] coeff[0:Taps-1];
+  reg [$clog2(Taps)-1:0] mac_idx;
 
-  // TODO: change laterto allow loading of high-low bytes for 16 bit samples
+  // TODO: change later to allow loading of high-low bytes for 16 bit samples
   // 0 LSB -> low; 1 LSB -> high
-  // load 16 bit in order from tap 0 -> tap N
+  // LoadCoeff 16 bit in order from tap 0 -> tap N
   reg [$clog2(Taps)-1:0] coeff_idx;
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       coeff_idx <= 0;
-    end else if (curr_st != Load) begin
+    end else if (curr_st != LoadCoeff) begin
       coeff_idx <= 0;
     end else begin
       coeff_idx <= coeff_idx + 1'b1;
     end
   end
 
-  // load incoming sample
-  always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
-      samples[0] <= {SampleWidth{1'b0}};
-    end else if (curr_st == Compute) begin
-      samples[0] <= din;
-    end
-  end
-
+  // coeff loading
   integer k;
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       for (k = 0; k < Taps; k = k + 1) begin
         coeff[k] <= {CoeffWidth{1'b0}};
       end
-    end else if (curr_st == Load) begin
+    end else if (curr_st == LoadCoeff) begin
       coeff[coeff_idx] <= din;
     end
   end
 
-  assign taps_out[0] = din * coeff[0];
+  // load incoming sample
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      samples[0] <= 0;
+    end else if (curr_st == Compute) begin
+      samples[0] <= din;
+    end
+  end
 
   genvar i;
   generate
-    // tap outputs
-    for (i = 1; i < Taps; i = i + 1) begin
-      assign taps_out[i] = samples[i-1] * coeff[i];
-    end
-    // big shift reg
+    // shift reg
     for (i = 1; i < Taps - 1; i = i + 1) begin
       always @(posedge clk or negedge rst_n) begin
         if (~rst_n) begin
@@ -122,28 +122,23 @@ module fir_filter #(
     end
   endgenerate
 
-  // output reg
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
-      output_r <= 0;
-    end else begin
-      if (ena) begin
-        output_r <= out_full;
-      end
+      mac_idx <= 0;
+    end else if (curr_st == Compute) begin
+      mac_idx <= mac_idx + 1'b1;
     end
   end
 
-  // adder chain for output
-  integer j;
-  always @(*) begin
-    out_full = 0;
-    for (j = 0; j < Taps; j = j + 1) begin
-      // gross
-      out_full = out_full + {{(OutWidth-SampleWidth-CoeffWidth){taps_out[j][SampleWidth+CoeffWidth-1]}}, taps_out[j]};
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      acc <= 0;
+    end else begin
+      acc <= acc + (coeff[mac_idx] * samples[mac_idx]);
     end
   end
 
   // TODO: change to correct bit slice
-  assign dout = output_r[14:7];
+  assign dout = acc[14:7];
 
 endmodule
