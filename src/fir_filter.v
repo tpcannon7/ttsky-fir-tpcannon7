@@ -133,6 +133,8 @@ module fir_filter #(
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       acc <= 0;
+    end else if (mac_idx == 0) begin
+      acc <= 0;
     end else begin
       acc <= acc + (coeff[mac_idx] * samples[mac_idx]);
     end
