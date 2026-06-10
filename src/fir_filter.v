@@ -92,7 +92,7 @@ module fir_filter #(
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       for (k = 0; k < Taps; k = k + 1) begin
-        coeff[k] <= {CoeffWidth{1'b0}};
+        coeff[k] <= 0;
       end
     end else if (curr_st == LoadCoeff) begin
       coeff[coeff_idx] <= din;
@@ -111,7 +111,7 @@ module fir_filter #(
   genvar i;
   generate
     // shift reg
-    for (i = 1; i < Taps - 1; i = i + 1) begin
+    for (i = 1; i < Taps; i = i + 1) begin
       always @(posedge clk or negedge rst_n) begin
         if (~rst_n) begin
           samples[i] <= 0;
