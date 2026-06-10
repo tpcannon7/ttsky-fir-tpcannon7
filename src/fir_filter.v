@@ -103,7 +103,7 @@ module fir_filter #(
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       samples[0] <= 0;
-    end else if (curr_st == Compute) begin
+    end else if (curr_st == Compute && mac_idx == 0 && in_valid) begin
       samples[0] <= din;
     end
   end
@@ -115,7 +115,7 @@ module fir_filter #(
       always @(posedge clk or negedge rst_n) begin
         if (~rst_n) begin
           samples[i] <= 0;
-        end else if (curr_st == Compute) begin
+        end else if (curr_st == Compute && mac_idx == 0 && in_valid) begin
           samples[i] <= samples[i-1];
         end
       end
