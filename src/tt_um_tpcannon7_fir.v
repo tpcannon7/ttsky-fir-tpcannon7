@@ -22,18 +22,16 @@ module tt_um_tpcannon7_fir (
   assign uio_oe = 8'b00001100;
 
   fir_filter #(
-      .SampleWidth(8),
-      .CoeffWidth(8),
       .Taps(8)
   ) fir (
       .clk(clk),
       .rst_n(rst_n),
       .din(ui_in),
       .dout(uo_out),
-      .out_valid(uio_out[3]),
       .load(uio_in[0]),
+      .in_valid(uio_in[1]),
       .in_ready(uio_out[2]),
-      .in_valid(uio_in[1])
+      .out_valid(uio_out[3])
   );
 
   // List all unused inputs to prevent warnings

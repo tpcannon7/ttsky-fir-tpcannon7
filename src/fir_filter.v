@@ -1,29 +1,29 @@
 `default_nettype none
 
 module fir_filter #(
-    parameter SampleWidth = 8,
-    parameter CoeffWidth = 8,
     parameter Taps = 8
 ) (
     input wire clk,
     input wire rst_n,
-    input wire signed [SampleWidth-1:0] din,
+    input wire signed [7:0] din,
     input wire load,
     input wire in_valid,
 
-    output wire signed [SampleWidth-1:0] dout,
+    output wire signed [7:0] dout,
     output wire out_valid,
     output wire in_ready
 );
 
+  localparam SampleWidth = 8;
+  localparam CoeffWidth = 8;
   localparam OutWidth = SampleWidth + CoeffWidth + $clog2(Taps);
 
   /* verilator lint_off WIDTHEXPAND */
   assign out_valid = (curr_st == Compute) && (mac_idx == Taps - 1);
   /* verilator lint_on WIDTHEXPAND */
-  assign in_ready  = (curr_st != LoadCoeff) && (mac_idx == 0);
+  assign in_ready  = (curr_st == Ready);
 
-  localparam [1:0] Idle = 2'b00, LoadCoeff = 2'b01, Compute = 2'b10;
+  localparam [1:0] Idle = 2'b00, LoadCoeff = 2'b01, Ready = 2'b10, Compute = 2'b11;
   reg [1:0] curr_st, next_st;
 
   // state machine
@@ -43,22 +43,27 @@ module fir_filter #(
           next_st = LoadCoeff;
         end else if (in_valid && in_ready && !load) begin
           next_st = Compute;
-        end else begin
-          next_st = Idle;
         end
       end
       LoadCoeff: begin
         if (load) begin
           next_st = LoadCoeff;
         end else begin
+          next_st = Ready;
+        end
+      end
+      Ready: begin
+        if (in_valid) begin
           next_st = Compute;
+        end else if (load) begin
+          next_st = LoadCoeff;
         end
       end
       Compute: begin
         if (load) begin
           next_st = LoadCoeff;
-        end else begin
-          next_st = Compute;
+        end else if (out_valid) begin
+          next_st = Ready;
         end
       end
       default: begin
@@ -71,10 +76,6 @@ module fir_filter #(
   reg signed [SampleWidth-1:0] samples[0:Taps-1];
   reg signed [CoeffWidth-1:0] coeff[0:Taps-1];
   reg [$clog2(Taps)-1:0] mac_idx;
-
-  // TODO: change later to allow loading of high-low bytes for 16 bit samples
-  // 0 LSB -> low; 1 LSB -> high
-  // LoadCoeff 16 bit in order from tap 0 -> tap N
   reg [$clog2(Taps)-1:0] coeff_idx;
 
   always @(posedge clk or negedge rst_n) begin
@@ -100,30 +101,24 @@ module fir_filter #(
   end
 
   // load incoming sample
+  integer i;
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
-      samples[0] <= 0;
-    end else if (curr_st == Compute && mac_idx == 0 && in_valid) begin
+      for (i = 0; i < Taps; i = i + 1) begin
+        samples[i] <= 0;
+      end
+    end else if (curr_st == Ready && in_valid) begin
       samples[0] <= din;
+      for (i = 1; i < Taps; i = i + 1) begin
+        samples[i] <= samples[i-1];
+      end
     end
   end
 
-  genvar i;
-  generate
-    // shift reg
-    for (i = 1; i < Taps; i = i + 1) begin
-      always @(posedge clk or negedge rst_n) begin
-        if (~rst_n) begin
-          samples[i] <= 0;
-        end else if (curr_st == Compute && mac_idx == 0 && in_valid) begin
-          samples[i] <= samples[i-1];
-        end
-      end
-    end
-  endgenerate
-
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
+      mac_idx <= 0;
+    end else if (curr_st == Ready) begin
       mac_idx <= 0;
     end else if (curr_st == Compute) begin
       mac_idx <= mac_idx + 1'b1;
@@ -133,9 +128,9 @@ module fir_filter #(
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       acc <= 0;
-    end else if (mac_idx == 0) begin
+    end else if (curr_st == Ready) begin
       acc <= 0;
-    end else begin
+    end else if (curr_st == Compute) begin
       acc <= acc + (coeff[mac_idx] * samples[mac_idx]);
     end
   end
