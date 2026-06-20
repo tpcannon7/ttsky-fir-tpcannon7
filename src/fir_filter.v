@@ -8,6 +8,7 @@ module fir_filter #(
     input wire signed [7:0] din,
     input wire load,
     input wire in_valid,
+    input wire out_ready,
 
     output wire signed [7:0] dout,
     output wire out_valid,
@@ -19,12 +20,12 @@ module fir_filter #(
   localparam OutWidth = SampleWidth + CoeffWidth + $clog2(Taps);
 
   /* verilator lint_off WIDTHEXPAND */
-  assign out_valid = (curr_st == Compute) && (mac_idx == Taps - 1);
+  assign out_valid = (curr_st == Done);
   /* verilator lint_on WIDTHEXPAND */
-  assign in_ready  = (curr_st == Ready);
+  assign in_ready  = (curr_st == Ready) || (curr_st == LoadCoeff);
 
-  localparam [1:0] Idle = 2'b00, LoadCoeff = 2'b01, Ready = 2'b10, Compute = 2'b11;
-  reg [1:0] curr_st, next_st;
+  localparam [2:0] Idle = 3'b000, LoadCoeff = 3'b001, Ready = 3'b010, Compute = 3'b011, Done = 3'b100;
+  reg [2:0] curr_st, next_st;
 
   // state machine
   always @(posedge clk or negedge rst_n) begin
@@ -62,7 +63,12 @@ module fir_filter #(
       Compute: begin
         if (load) begin
           next_st = LoadCoeff;
-        end else if (out_valid) begin
+        end else if (mac_idx == Taps - 1) begin
+          next_st = Done;
+        end
+      end
+      Done: begin
+        if (out_ready) begin
           next_st = Ready;
         end
       end
@@ -83,7 +89,7 @@ module fir_filter #(
       coeff_idx <= 0;
     end else if (curr_st != LoadCoeff) begin
       coeff_idx <= 0;
-    end else begin
+    end else if (curr_st == LoadCoeff && in_valid) begin
       coeff_idx <= coeff_idx + 1'b1;
     end
   end
@@ -95,22 +101,24 @@ module fir_filter #(
       for (k = 0; k < Taps; k = k + 1) begin
         coeff[k] <= 0;
       end
-    end else if (curr_st == LoadCoeff) begin
+    end else if (curr_st == LoadCoeff && in_valid) begin
       coeff[coeff_idx] <= din;
     end
   end
 
-  // load incoming sample
   integer i;
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       for (i = 0; i < Taps; i = i + 1) begin
         samples[i] <= 0;
       end
-    end else if (curr_st == Ready && in_valid) begin
-      samples[0] <= din;
-      for (i = 1; i < Taps; i = i + 1) begin
-        samples[i] <= samples[i-1];
+    end else if (curr_st == Ready) begin
+      if (in_valid) begin
+        samples[0] <= din;
+      end else begin
+        for (i = 1; i < Taps; i = i + 1) begin
+          samples[i] <= samples[i-1];
+        end
       end
     end
   end
@@ -118,7 +126,7 @@ module fir_filter #(
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       mac_idx <= 0;
-    end else if (curr_st == Ready) begin
+    end else if (curr_st == Done) begin
       mac_idx <= 0;
     end else if (curr_st == Compute) begin
       mac_idx <= mac_idx + 1'b1;

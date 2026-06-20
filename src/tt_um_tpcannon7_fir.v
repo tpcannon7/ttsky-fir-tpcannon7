@@ -17,9 +17,9 @@ module tt_um_tpcannon7_fir (
 );
 
   // All output pins must be assigned. If not used, assign to 0.
-  assign uio_out[7:4] = 0;
-  assign uio_out[1:0] = 0;
-  assign uio_oe = 8'b00001100;
+  assign uio_out[7:5] = 0;
+  assign uio_out[2:0] = 0;
+  assign uio_oe = 8'b00011000;
 
   fir_filter #(
       .Taps(8)
@@ -30,11 +30,12 @@ module tt_um_tpcannon7_fir (
       .dout(uo_out),
       .load(uio_in[0]),
       .in_valid(uio_in[1]),
-      .in_ready(uio_out[2]),
-      .out_valid(uio_out[3])
+      .out_ready(uio_in[2]),
+      .in_ready(uio_out[3]),
+      .out_valid(uio_out[4])
   );
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{uio_in[7:2], ena, 1'b0};
+  wire _unused = &{uio_in[7:3], ena, 1'b0};
 
 endmodule
