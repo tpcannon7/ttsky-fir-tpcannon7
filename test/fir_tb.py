@@ -99,6 +99,8 @@ async def test_impulse_response(dut):
         res = dut.uo_out.value.to_signed()
         cocotb.log.info(f"res = {res}")
         cocotb.log.info(f"expected = {coeffs[idx]}")
+        assert abs(res - coeffs[idx]) <= 1, f"{res} does not match in acceptable range to {coeffs[idx]}"
+
         await ClockCycles(dut.clk, 2)
 
         # assert out_ready to accept sample
@@ -155,6 +157,8 @@ async def test_step_response(dut):
     expected = sum(coeffs)
     cocotb.log.info(f"res = {res}")
     cocotb.log.info(f"exp = {expected}")
+
+    assert abs(res - expected) <= 1, f"{res} does not match within error to {expected}"
     
 @cocotb.test()
 async def test_noisy_sine(dut):
@@ -187,6 +191,11 @@ async def test_noisy_sine(dut):
     await reset(dut)
     await load_coeff(dut, coeffs)
 
+    cocotb.log.info("----------------------------------")
+    cocotb.log.info("           NOISY SINE             ")
+    cocotb.log.info("----------------------------------")
+
+
     for idx, s in enumerate(samples):
         while ((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
             await ClockCycles(dut.clk, 1)
@@ -217,6 +226,8 @@ async def test_noisy_sine(dut):
     dut_rms = math.sqrt(sum(x**2 for x in y_fir) / len(y_fir))
     err_rms = math.sqrt(sum((g - d)**2 for g, d in zip(y_lfilter, y_fir)) / len(y_fir))
     snr = 20.0 * math.log10(gold_rms / err_rms)
+
+    assert snr > 30.0, f"SNR = {snr} below acceptable threshold"
 
     cocotb.log.info(f"SNR = {snr}")
 
