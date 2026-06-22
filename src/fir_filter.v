@@ -143,7 +143,6 @@ module fir_filter #(
     end
   end
 
-  // TODO: change to correct bit slice
   assign dout = acc[14:7];
 
 endmodule
