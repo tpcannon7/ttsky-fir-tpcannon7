@@ -19,9 +19,7 @@ module fir_filter #(
   localparam CoeffWidth = 8;
   localparam OutWidth = SampleWidth + CoeffWidth + $clog2(Taps);
 
-  /* verilator lint_off WIDTHEXPAND */
   assign out_valid = (curr_st == Done);
-  /* verilator lint_on WIDTHEXPAND */
   assign in_ready  = (curr_st == Ready) || (curr_st == LoadCoeff);
 
   localparam [2:0] Idle = 3'b000, LoadCoeff = 3'b001, Ready = 3'b010, Compute = 3'b011, Done = 3'b100;
@@ -63,7 +61,7 @@ module fir_filter #(
       Compute: begin
         if (load) begin
           next_st = LoadCoeff;
-        end else if (mac_idx == Taps - 1) begin
+        end else if ({1'b0, mac_idx} == Taps[$clog2(Taps):0] - 1'b1) begin  // linter approved :)
           next_st = Done;
         end
       end
