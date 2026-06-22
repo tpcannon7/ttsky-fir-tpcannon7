@@ -6,6 +6,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 
+
+# TODO: add more tests!
+# reset during compute
+# verify handshake works by streaming inputs
+
 # params
 taps = 8
 coeff_width = 8
