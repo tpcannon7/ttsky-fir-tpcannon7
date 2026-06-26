@@ -12,7 +12,7 @@ import math
 # verify handshake works by streaming inputs
 
 # params
-taps = 8
+taps = 16
 coeff_width = 16
 sample_width = 16
 
@@ -134,7 +134,7 @@ async def test_impulse_response(dut):
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
     cocotb.log.info(f"fixed coeffs = {coeffs}")
 
-    samples = [(2**(sample_width-1))-1,0,0,0,0,0,0,0]
+    samples = [(2**(sample_width-1))-1] + ([0] * (taps - 1))
 
     cocotb.log.info("----------------------------------")
     cocotb.log.info("           IMPULSE RESPONSE      ")
@@ -184,9 +184,7 @@ async def test_step_response(dut):
     cocotb.log.info(f"fixed coeffs = {coeffs}")
 
     # step response
-    samples = [0,0,0,0,0,0,0,0,(2**(sample_width-1))-1,(2**(sample_width-1))-1,(2**(sample_width-1))-1,
-                (2**(sample_width-1))-1,(2**(sample_width-1))-1,(2**(sample_width-1))-1,
-                (2**(sample_width-1))-1,(2**(sample_width-1))-1]
+    samples = [0] * taps + [(2**(sample_width-1))-1] * taps
 
     cocotb.log.info("----------------------------------")
     cocotb.log.info("           STEP RESPONSE          ")
@@ -217,7 +215,7 @@ async def test_step_response(dut):
     cocotb.log.info(f"out = {out}")
     cocotb.log.info(f"exp = {expected}")
 
-    assert abs(out - expected) <= 1, f"{res} does not match within error to {expected}"
+    assert abs(out - expected) <= 1, f"{out} does not match within error to {expected}"
     
 @cocotb.test()
 async def test_noisy_sine(dut):
