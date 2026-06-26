@@ -37,6 +37,6 @@ module tt_um_tpcannon7_fir (
   );
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{uio_in[7:6], ena, 1'b0};
+  wire _unused = &{uio_in[7:6], uio_in[4:3], ena, 1'b0};
 
 endmodule
