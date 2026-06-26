@@ -32,10 +32,11 @@ module tt_um_tpcannon7_fir (
       .in_valid(uio_in[1]),
       .out_ready(uio_in[2]),
       .in_ready(uio_out[3]),
-      .out_valid(uio_out[4])
+      .out_valid(uio_out[4]),
+      .byte_en(uio_in[5])
   );
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{uio_in[7:3], ena, 1'b0};
+  wire _unused = &{uio_in[7:6], ena, 1'b0};
 
 endmodule

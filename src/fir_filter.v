@@ -9,15 +9,18 @@ module fir_filter #(
     input wire load,
     input wire in_valid,
     input wire out_ready,
+    input wire byte_en,
 
     output wire signed [7:0] dout,
     output wire out_valid,
     output wire in_ready
 );
 
-  localparam SampleWidth = 8;
-  localparam CoeffWidth = 8;
+  localparam SampleWidth = 16;
+  localparam CoeffWidth = 16;
   localparam OutWidth = SampleWidth + CoeffWidth + $clog2(Taps);
+  localparam OutBytes = SampleWidth / 8;
+  localparam OutCntWidth = OutBytes <= 1 ? $clog2(OutBytes) : 1;
 
   assign out_valid = (curr_st == Done);
   assign in_ready  = (curr_st == Ready) || (curr_st == LoadCoeff);
@@ -44,7 +47,7 @@ module fir_filter #(
           next_st = Compute;
         end
       end
-      LoadCoeff: begin
+      LoadCoeff: begin  // might need to add byte_en here, should be fine?
         if (load) begin
           next_st = LoadCoeff;
         end else begin
@@ -52,7 +55,7 @@ module fir_filter #(
         end
       end
       Ready: begin
-        if (in_valid) begin
+        if (in_valid && byte_en) begin
           next_st = Compute;
         end else if (load) begin
           next_st = LoadCoeff;
@@ -66,7 +69,7 @@ module fir_filter #(
         end
       end
       Done: begin
-        if (out_ready) begin
+        if ({1'b0, out_byte_cnt} == OutBytes[$clog2(OutBytes):0] - 1'b1) begin
           next_st = Ready;
         end
       end
@@ -79,15 +82,28 @@ module fir_filter #(
   reg signed [OutWidth-1:0] acc;
   reg signed [SampleWidth-1:0] samples[0:Taps-1];
   reg signed [CoeffWidth-1:0] coeff[0:Taps-1];
+  reg signed [(SampleWidth/2)-1:0] low_byte_buf;
+
   reg [$clog2(Taps)-1:0] mac_idx;
   reg [$clog2(Taps)-1:0] coeff_idx;
+  reg [OutCntWidth-1:0] out_byte_cnt;
+
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      low_byte_buf <= 0;
+    end else if ((curr_st == LoadCoeff && !byte_en) || (curr_st == Ready && !byte_en)) begin
+      low_byte_buf <= din;
+    end else begin
+      low_byte_buf <= 0;
+    end
+  end
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       coeff_idx <= 0;
     end else if (curr_st != LoadCoeff) begin
       coeff_idx <= 0;
-    end else if (curr_st == LoadCoeff && in_valid) begin
+    end else if (curr_st == LoadCoeff && in_valid && byte_en) begin
       coeff_idx <= coeff_idx + 1'b1;
     end
   end
@@ -99,8 +115,8 @@ module fir_filter #(
       for (k = 0; k < Taps; k = k + 1) begin
         coeff[k] <= 0;
       end
-    end else if (curr_st == LoadCoeff && in_valid) begin
-      coeff[coeff_idx] <= din;
+    end else if (curr_st == LoadCoeff && in_valid && byte_en) begin
+      coeff[coeff_idx] <= {din, low_byte_buf};
     end
   end
 
@@ -111,9 +127,9 @@ module fir_filter #(
         samples[i] <= 0;
       end
     end else if (curr_st == Ready) begin
-      if (in_valid) begin
-        samples[0] <= din;
-      end else begin
+      if (in_valid && byte_en) begin
+        samples[0] <= {din, low_byte_buf};
+      end else if (!in_valid) begin
         for (i = 1; i < Taps; i = i + 1) begin
           samples[i] <= samples[i-1];
         end
@@ -141,6 +157,16 @@ module fir_filter #(
     end
   end
 
-  assign dout = acc[14:7];
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      out_byte_cnt <= 0;
+    end else if (curr_st == Done && out_ready) begin
+      out_byte_cnt <= out_byte_cnt + 1'b1;
+    end else if (curr_st != Done) begin
+      out_byte_cnt <= 0;
+    end
+  end
+
+  assign dout = acc[(out_byte_cnt*8)+(CoeffWidth-1)+:8];
 
 endmodule
