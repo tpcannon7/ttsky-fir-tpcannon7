@@ -153,7 +153,7 @@ module fir_filter #(
     end else if (curr_st == Ready) begin
       acc <= 0;
     end else if (curr_st == Compute) begin
-      acc <= acc + (coeff[mac_idx] * samples[mac_idx]);
+      acc <= acc + (coeff[mac_idx] * samples[mac_idx][7:0]);
     end
   end
 
