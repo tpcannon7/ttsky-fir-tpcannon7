@@ -111,7 +111,7 @@ async def read_output(dut):
         out_low = dut.uo_out.value.to_unsigned()
         dut.uio_in.value = OUT_READY
         await ClockCycles(dut.clk,1)
-        await Timer(1, units='ns')
+        await Timer(1, unit='ns')
         out_high = dut.uo_out.value.to_unsigned()
         dut.uio_in.value = OUT_READY
         await ClockCycles(dut.clk,1)
@@ -144,9 +144,6 @@ async def test_impulse_response(dut):
     await load_coeff(dut, coeffs)
 
     for idx, s in enumerate(samples):
-
- 
-
         # wait for in_ready
         while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
             await RisingEdge(dut.clk)
