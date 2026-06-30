@@ -11,7 +11,6 @@ import math
 # reset during compute
 # verify handshake works by streaming inputs
 
-
 # clock perod (ns)
 clock_period = 40
 
@@ -36,6 +35,14 @@ IN_READY = 0x08
 OUT_VALID = 0x10
 BYTE_EN = 0x20
 
+async def rising_edge(dut):
+    await RisingEdge(dut.clk)
+    await Timer(1, "ns")
+
+async def clock_cycles(dut, num):
+    await ClockCycles(dut.clk,num)
+    await Timer(1, "ns")
+
 async def reset(dut):
     dut.ui_in.value = 0x00
     dut.uio_in.value = 0x00
@@ -53,8 +60,9 @@ async def load_coeff(dut, coeffs):
         dut.uio_in.value = LOAD_EN
 
         # wait for in_ready
+        await rising_edge(dut)
         while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-                await RisingEdge(dut.clk)
+                await rising_edge(dut)
 
         # assert in_valid + load_en, then load coeffcients
         dut.uio_in.value = LOAD_EN | IN_VALID
@@ -67,8 +75,9 @@ async def load_coeff(dut, coeffs):
     elif(coeff_width == 16):
         dut.uio_in.value = LOAD_EN
 
+        await rising_edge(dut)
         while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-            await RisingEdge(dut.clk)
+            await rising_edge(dut)
 
         for coeff in coeffs:
             dut.uio_in.value = LOAD_EN | IN_VALID
@@ -76,7 +85,10 @@ async def load_coeff(dut, coeffs):
             coeff_high = (coeff & 0xff00) >> 8
 
             dut.ui_in.value = coeff_low
-            await ClockCycles(dut.clk, 1)
+            
+            await rising_edge(dut)
+            while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
+                await rising_edge(dut)
 
             dut.uio_in.value = LOAD_EN | IN_VALID | BYTE_EN
             dut.ui_in.value = coeff_high
@@ -92,13 +104,18 @@ async def load_sample(dut, sample):
         await ClockCycles(dut.clk, 1)
         dut.uio_in.value = 0x00
     elif (sample_width == 16):
-        # double check make sure this mask works
         sample_low = sample & 0x00ff
         sample_high = (sample & 0xff00) >> 8
 
+        # assert in_valid, send low byte of sample
         dut.uio_in.value = IN_VALID
         dut.ui_in.value = sample_low
-        await ClockCycles(dut.clk, 1)
+        
+        # wait for in_ready to send high byte of sample
+        await rising_edge(dut)
+        while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
+            await rising_edge(dut)
+
         dut.uio_in.value = IN_VALID | BYTE_EN
         dut.ui_in.value = sample_high
         await ClockCycles(dut.clk, 1)
@@ -149,16 +166,18 @@ async def test_impulse_response(dut):
 
     for idx, s in enumerate(samples):
         # wait for in_ready
+        await rising_edge(dut)
         while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-            await RisingEdge(dut.clk)
+            await rising_edge(dut)
 
         # assert in_valid, load sample in
         await load_sample(dut, s)
         cocotb.log.info(f"sample {idx} = {s}")  
 
         # wait for out_valid
+        await rising_edge(dut)
         while((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
-            await RisingEdge(dut.clk)
+            await rising_edge(dut)
 
         # TODO: straight truncation means off by 1, add rounding later
         # assert out_ready to accept sample
@@ -196,16 +215,18 @@ async def test_step_response(dut):
 
     for idx, s in enumerate(samples):
         # wait for in_ready
+        await rising_edge(dut)
         while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-            await RisingEdge(dut.clk)
+            await rising_edge(dut)
 
         # in_valid
         await load_sample(dut, s)
         cocotb.log.info(f"sample {idx} = {s}")
 
         # wait for out_valid
+        await rising_edge(dut)
         while((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
-            await RisingEdge(dut.clk)
+            await rising_edge(dut)
 
         # take sample out
         out = await read_output(dut)   
@@ -253,17 +274,20 @@ async def test_noisy_sine(dut):
 
 
     for idx, s in enumerate(samples):
+        await rising_edge(dut)
         while ((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-            await ClockCycles(dut.clk, 1)
+            await rising_edge(dut)
 
         # input sample
         await load_sample(dut, s)
         cocotb.log.info(f"sample {idx} = {s}")
 
+        await rising_edge(dut)
         while ((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
-            await ClockCycles(dut.clk,1)
+            await rising_edge(dut)
 
         out = await read_output(dut)
+        cocotb.log.info(f"out = {out}")
         out = out / float(normalize)
         y_fir.append(out)
 
@@ -281,15 +305,3 @@ async def test_noisy_sine(dut):
     assert snr > 30.0, f"SNR = {snr} below acceptable threshold"
 
     cocotb.log.info(f"SNR = {snr}")
-
-
-
-
-
-
-
-
-
-
-
-
