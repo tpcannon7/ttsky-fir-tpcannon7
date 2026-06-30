@@ -18,7 +18,7 @@ module fir_filter #(
 
   localparam SampleWidth = 16;
   localparam CoeffWidth = 16;
-  localparam OutWidth = SampleWidth + CoeffWidth + $clog2(Taps);
+  localparam AccWidth = SampleWidth + CoeffWidth + $clog2(Taps);
   localparam OutBytes = SampleWidth / 8;
   localparam OutCntWidth = OutBytes <= 1 ? $clog2(OutBytes) : 1;
 
@@ -79,7 +79,7 @@ module fir_filter #(
     endcase
   end
 
-  reg signed [OutWidth-1:0] acc;
+  reg signed [AccWidth-1:0] acc;
   reg signed [SampleWidth-1:0] samples[0:Taps-1];
   reg signed [CoeffWidth-1:0] coeff[0:Taps-1];
   reg signed [(SampleWidth/2)-1:0] low_byte_buf;
@@ -167,6 +167,7 @@ module fir_filter #(
     end
   end
 
+  // low then high byte on output
   assign dout = acc[(out_byte_cnt*8)+(CoeffWidth-1)+:8];
 
 endmodule

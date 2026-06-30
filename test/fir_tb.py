@@ -11,6 +11,10 @@ import math
 # reset during compute
 # verify handshake works by streaming inputs
 
+
+# clock perod (ns)
+clock_period = 40
+
 # params
 taps = 16
 coeff_width = 16
@@ -38,7 +42,7 @@ async def reset(dut):
     dut.ena.value = 1
     dut.rst_n.value = 0
 
-    await ClockCycles(dut.clk, 3)
+    await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
 
     await RisingEdge(dut.clk)
@@ -124,7 +128,7 @@ async def read_output(dut):
 
 @cocotb.test()
 async def test_impulse_response(dut):
-    clk = Clock(dut.clk, 10, "us")
+    clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
 
     h = firwin(taps, fc, fs=fs)
@@ -150,12 +154,7 @@ async def test_impulse_response(dut):
 
         # assert in_valid, load sample in
         await load_sample(dut, s)
-        cocotb.log.info(f"sample {idx} = {s}")
-
-        for i in range(taps):
-            coeff = dut.tt_um_tpcannon7_fir.fir.coeff[i].value.to_signed()
-            sample = dut.tt_um_tpcannon7_fir.fir.samples[i].value.to_signed()
-            cocotb.log.info(f"coeff[{i}] = {coeff}, sample[{i}] = {sample}")   
+        cocotb.log.info(f"sample {idx} = {s}")  
 
         # wait for out_valid
         while((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
@@ -171,7 +170,7 @@ async def test_impulse_response(dut):
 
 @cocotb.test()
 async def test_step_response(dut):
-    clk = Clock(dut.clk, 10, "us")
+    clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
 
     # generate coeffs
@@ -219,7 +218,7 @@ async def test_step_response(dut):
     
 @cocotb.test()
 async def test_noisy_sine(dut):
-    clk = Clock(dut.clk, 10, "us")
+    clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
 
     # generate coeffs
