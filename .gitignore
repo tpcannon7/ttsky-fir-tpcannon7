@@ -13,3 +13,6 @@ test/results.xml
 test/gate_level_netlist.v
 tt/
 *.png
+*/__pycache__
+*/sim_build
+*/results.xml

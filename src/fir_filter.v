@@ -18,9 +18,10 @@ module fir_filter #(
 
   localparam SampleWidth = 16;
   localparam CoeffWidth = 16;
-  localparam AccWidth = SampleWidth + CoeffWidth + $clog2(Taps);
+  //localparam AccWidth = SampleWidth + CoeffWidth + $clog2(Taps);
+  localparam AccWidth = SampleWidth + $clog2(Taps);
   localparam OutBytes = SampleWidth / 8;
-  localparam OutCntWidth = OutBytes <= 1 ? $clog2(OutBytes) : 1;
+  localparam OutCntWidth = OutBytes <= 1 ? 1 : $clog2(OutBytes);
 
   assign out_valid = (curr_st == Done);
   assign in_ready  = (curr_st == Ready) || (curr_st == LoadCoeff);
@@ -153,9 +154,20 @@ module fir_filter #(
     end else if (curr_st == Ready) begin
       acc <= 0;
     end else if (curr_st == Compute) begin
-      acc <= acc + (coeff[mac_idx] * samples[mac_idx]);
+      //acc <= acc + (coeff[mac_idx] * samples[mac_idx]);
+      acc <= acc + out;
     end
   end
+
+  reg signed [16:0] out;
+  trunc_mult #(
+      .DataWidth(SampleWidth),
+      .DropBits (15)
+  ) mult (
+      .a  (samples[mac_idx]),
+      .b  (coeff[mac_idx]),
+      .out(out)
+  );
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
@@ -168,6 +180,8 @@ module fir_filter #(
   end
 
   // low then high byte on output
-  assign dout = acc[(out_byte_cnt*8)+(CoeffWidth-1)+:8];
+  // assign dout = acc[(out_byte_cnt*8)+(CoeffWidth-1)+:8];
+
+  assign dout = acc[(out_byte_cnt*8)+:8];
 
 endmodule
