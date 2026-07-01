@@ -18,8 +18,8 @@ module fir_filter #(
 
   localparam SampleWidth = 16;
   localparam CoeffWidth = 16;
+  localparam AccWidth = ((SampleWidth + CoeffWidth) - (CoeffWidth - 1)) + $clog2(Taps);
   //localparam AccWidth = SampleWidth + CoeffWidth + $clog2(Taps);
-  localparam AccWidth = SampleWidth + $clog2(Taps);
   localparam OutBytes = SampleWidth / 8;
   localparam OutCntWidth = OutBytes <= 1 ? 1 : $clog2(OutBytes);
 
@@ -162,7 +162,7 @@ module fir_filter #(
   reg signed [16:0] out;
   trunc_mult #(
       .DataWidth(SampleWidth),
-      .DropBits (15)
+      .DropBits (CoeffWidth - 1)
   ) mult (
       .a  (samples[mac_idx]),
       .b  (coeff[mac_idx]),
