@@ -155,18 +155,18 @@ module fir_filter #(
       acc <= 0;
     end else if (curr_st == Compute) begin
       //acc <= acc + (coeff[mac_idx] * samples[mac_idx]);
-      acc <= acc + out;
+      acc <= acc + {3'b00, trunc_out};
     end
   end
 
-  reg signed [16:0] out;
+  reg signed [16:0] trunc_out;
   trunc_mult #(
       .DataWidth(SampleWidth),
       .DropBits (CoeffWidth - 1)
   ) mult (
       .a  (samples[mac_idx]),
       .b  (coeff[mac_idx]),
-      .out(out)
+      .out(trunc_out)
   );
 
   always @(posedge clk or negedge rst_n) begin

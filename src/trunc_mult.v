@@ -19,11 +19,11 @@ module trunc_mult #(
   localparam H = DataWidth - DropBits;
 
   // each partial product is one bit in array per column
-  reg signed [DataWidth-1:0] partial_products[0:Columns-1];
+  reg [DataWidth-1:0] partial_products[0:Columns-1];
   // sum of all partial products per row
-  reg signed [$clog2(DataWidth):0] sum_products[0:Columns-1];
+  reg [$clog2(DataWidth):0] sum_products[0:Columns-1];
   // accumulator of all sum_products
-  reg signed [OutputSlice:0] accumulate;
+  reg [OutputSlice:0] accumulate;
 
   genvar product_column;
   integer a_idx, b_idx;
@@ -113,13 +113,13 @@ module trunc_mult #(
   always @(*) begin
     accumulate = '0;
     for (product_idx = DropBits; product_idx < OutputWidth; product_idx++) begin
+      // "1" term added in the final bit column sum
       if (product_idx == OutputWidth - 1) begin
         accumulate = accumulate + ((sum_products[product_idx-DropBits] + 1'b1) << (product_idx - DropBits + 1));
       end else begin
         accumulate = accumulate + (sum_products[product_idx-DropBits] << (product_idx - DropBits + 1));
       end
     end
-
     // these shifts values are derived from:
     // "Low error Truncated Multipliers for DSP applications" Garafolo et al.
     accumulate = accumulate + (edge_ic) + (middle_ic << 1);
