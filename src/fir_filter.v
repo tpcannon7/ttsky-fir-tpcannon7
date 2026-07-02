@@ -163,7 +163,7 @@ module fir_filter #(
     end
   end
 
-  reg signed [16:0] trunc_out;
+  wire signed [16:0] trunc_out;
   trunc_mult #(
       .DataWidth(SampleWidth),
       .DropBits (CoeffWidth - 1)
@@ -183,16 +183,5 @@ module fir_filter #(
       out_byte_cnt <= 0;
     end
   end
-
-  reg [7:0] dout_reg;
-  always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
-      dout_reg <= 0;
-    end else if (curr_st == Done) begin
-      dout_reg <= acc[(out_byte_cnt*8)+:8];
-    end
-  end
-
-
 
 endmodule
