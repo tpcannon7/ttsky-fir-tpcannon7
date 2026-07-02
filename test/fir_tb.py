@@ -35,14 +35,6 @@ IN_READY = 0x08
 OUT_VALID = 0x10
 BYTE_EN = 0x20
 
-async def rising_edge(dut):
-    await RisingEdge(dut.clk)
-    await Timer(1, "ns")
-
-async def clock_cycles(dut, num):
-    await ClockCycles(dut.clk,num)
-    await Timer(1, "ns")
-
 async def reset(dut):
     dut.ui_in.value = 0x00
     dut.uio_in.value = 0x00
@@ -56,52 +48,47 @@ async def reset(dut):
 
 async def load_coeff(dut, coeffs):
     if (coeff_width == 8):
-        # assert load_en
-        dut.uio_in.value = LOAD_EN
-
-        # wait for in_ready
-        await rising_edge(dut)
-        while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-                await rising_edge(dut)
-
-        # assert in_valid + load_en, then load coeffcients
-        dut.uio_in.value = LOAD_EN | IN_VALID
-        for coeff in coeffs:
-            dut.ui_in.value = coeff
-            await RisingEdge(dut.clk)
-
-        dut.uio_in.value = 0x00
-        await RisingEdge(dut.clk)
-    elif(coeff_width == 16):
-        dut.uio_in.value = LOAD_EN
-
-        await rising_edge(dut)
-        while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-            await rising_edge(dut)
-
         for coeff in coeffs:
             dut.uio_in.value = LOAD_EN | IN_VALID
+            dut.ui_in.value = coeff
+
+            # wait for in_ready
+            await RisingEdge(dut.clk)
+            while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
+                    await RisingEdge(dut.clk)
+
+        dut.uio_in.value = 0x00
+
+    elif(coeff_width == 16):
+        for coeff in coeffs:
             coeff_low = coeff & 0x00ff
             coeff_high = (coeff & 0xff00) >> 8
 
+            dut.uio_in.value = LOAD_EN | IN_VALID
             dut.ui_in.value = coeff_low
-            
-            await rising_edge(dut)
+
+            # wait in_ready, low_byte
+            await RisingEdge(dut.clk)
             while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-                await rising_edge(dut)
+                #cocotb.log.info("waiting low byte coeff")
+                await RisingEdge(dut.clk)
 
             dut.uio_in.value = LOAD_EN | IN_VALID | BYTE_EN
             dut.ui_in.value = coeff_high
-            await ClockCycles(dut.clk,1)
+
+            # wait for in_ready, high byte
+            await RisingEdge(dut.clk)
+            while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
+                #cocotb.log.info("waiting low byte coeff")
+                await RisingEdge(dut.clk)
         
         dut.uio_in.value = 0x00
-        await ClockCycles(dut.clk,1)
 
 async def load_sample(dut, sample):
     if (sample_width == 8):
         dut.uio_in.value = IN_VALID
         dut.ui_in.value = sample
-        await ClockCycles(dut.clk, 1)
+        await RisingEdge(dut.clk)
         dut.uio_in.value = 0x00
     elif (sample_width == 16):
         sample_low = sample & 0x00ff
@@ -111,34 +98,58 @@ async def load_sample(dut, sample):
         dut.uio_in.value = IN_VALID
         dut.ui_in.value = sample_low
         
-        # wait for in_ready to send high byte of sample
-        await rising_edge(dut)
+        # wait for in_ready to send next byte
+        await RisingEdge(dut.clk)
         while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-            await rising_edge(dut)
+            #cocotb.log.info("waiting low byte sample")
+            await RisingEdge(dut.clk)
 
         dut.uio_in.value = IN_VALID | BYTE_EN
         dut.ui_in.value = sample_high
-        await ClockCycles(dut.clk, 1)
+
+        # wait for in_ready, high_byte
+        await RisingEdge(dut.clk)
+        while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
+            #cocotb.log.info("waiting high byte sample")
+            await RisingEdge(dut.clk)
+
+        dut.ui_in.value = 0x00
         dut.uio_in.value = 0x00
 
 async def read_output(dut):
     if (sample_width == 8):
-        out = dut.uo_out.value.to_signed()
         dut.uio_in.value = OUT_READY
-        await ClockCycles(dut.clk,1)
+
+        await RisingEdge(dut.clk)
+        while((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
+            #cocotb.log.info("waiting output")
+            await RisingEdge(dut.clk)
+
+        out = dut.uo_out.to_unsigned()
         dut.uio_out.value = 0x00
         return out
     elif (sample_width == 16):
+        dut.uio_in.value = OUT_READY
+
+        # wait for out_valid, low byte
+        await RisingEdge(dut.clk)
+        while((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
+            #cocotb.log.info("waiting low byte output")
+            await RisingEdge(dut.clk)
+
         out_low = dut.uo_out.value.to_unsigned()
         dut.uio_in.value = OUT_READY
-        await ClockCycles(dut.clk,1)
-        await Timer(1, unit='ns')
-        out_high = dut.uo_out.value.to_unsigned()
-        dut.uio_in.value = OUT_READY
-        await ClockCycles(dut.clk,1)
-        dut.uio_in.value = 0x00
-        result = ((out_high & 0xff) << 8) | (out_low & 0xff)
 
+        # wait for out_valid, high byte
+        await RisingEdge(dut.clk)
+        while((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
+            #cocotb.log.info("waiting high byte output")
+            await RisingEdge(dut.clk)
+
+        out_high = dut.uo_out.value.to_unsigned()
+        dut.uio_in.value = 0x00
+        
+        result = ((out_high & 0xff) << 8) | (out_low & 0xff)
         if result & 0x8000:
             result -= 0x10000
         return result
@@ -158,30 +169,21 @@ async def test_impulse_response(dut):
     samples = [(2**(sample_width-1))-1] + ([0] * (taps - 1))
 
     cocotb.log.info("----------------------------------")
-    cocotb.log.info("           IMPULSE RESPONSE      ")
+    cocotb.log.info("         IMPULSE RESPONSE         ")
     cocotb.log.info("----------------------------------")
 
     await reset(dut)
     await load_coeff(dut, coeffs)
 
     for idx, s in enumerate(samples):
-        # wait for in_ready
-        await rising_edge(dut)
-        while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-            await rising_edge(dut)
-
         # assert in_valid, load sample in
         await load_sample(dut, s)
+        await RisingEdge(dut.clk)
         cocotb.log.info(f"sample {idx} = {s}")  
 
-        # wait for out_valid
-        await rising_edge(dut)
-        while((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
-            await rising_edge(dut)
-
-        # TODO: straight truncation means off by 1, add rounding later
-        # assert out_ready to accept sample
+        # read output
         res = await read_output(dut)
+        await RisingEdge(dut.clk)
         cocotb.log.info(f"res = {res}")
         cocotb.log.info(f"expected = {coeffs[idx]}")
         assert abs(res - coeffs[idx]) <= 5, f"{res} does not match in acceptable range to {coeffs[idx]}"
@@ -214,19 +216,9 @@ async def test_step_response(dut):
     out = 0
 
     for idx, s in enumerate(samples):
-        # wait for in_ready
-        await rising_edge(dut)
-        while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-            await rising_edge(dut)
-
-        # in_valid
+        # load sample in
         await load_sample(dut, s)
         cocotb.log.info(f"sample {idx} = {s}")
-
-        # wait for out_valid
-        await rising_edge(dut)
-        while((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
-            await rising_edge(dut)
 
         # take sample out
         out = await read_output(dut)   
@@ -265,28 +257,22 @@ async def test_noisy_sine(dut):
     samples_float = [s / float(normalize) for s in samples]
     y_lfilter = lfilter(h, 1.0, samples_float)
 
-    await reset(dut)
-    await load_coeff(dut, coeffs)
+
 
     cocotb.log.info("----------------------------------")
     cocotb.log.info("           NOISY SINE             ")
     cocotb.log.info("----------------------------------")
 
+    await reset(dut)
+    await load_coeff(dut, coeffs)
 
     for idx, s in enumerate(samples):
-        await rising_edge(dut)
-        while ((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-            await rising_edge(dut)
-
         # input sample
         await load_sample(dut, s)
         cocotb.log.info(f"sample {idx} = {s}")
 
-        await rising_edge(dut)
-        while ((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
-            await rising_edge(dut)
-
         out = await read_output(dut)
+
         cocotb.log.info(f"out = {out}")
         out = out / float(normalize)
         y_fir.append(out)
