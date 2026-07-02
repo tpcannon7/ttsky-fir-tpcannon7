@@ -111,11 +111,11 @@ module fir_filter #(
   end
 
   reg signed [CoeffWidth-1:0] coeff[0:Taps-1];
-  integer idx;
+  integer c_idx;
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
-      for (idx = 0; idx < Taps; idx++) begin
-        coeff[idx] <= 0;
+      for (c_idx = 0; c_idx < Taps; c_idx++) begin
+        coeff[c_idx] <= 0;
       end
     end else if (curr_st == LoadCoeff) begin
       if (in_handshake && byte_en) begin
@@ -125,17 +125,18 @@ module fir_filter #(
   end
 
   reg signed [SampleWidth-1:0] samples[0:Taps-1];
+  integer s_idx;
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
-      for (idx = 0; idx < Taps; idx++) begin
-        samples[idx] <= 0;
+      for (s_idx = 0; s_idx < Taps; s_idx++) begin
+        samples[s_idx] <= 0;
       end
     end else if (curr_st == Ready) begin
       if (in_handshake && byte_en) begin
         samples[0] <= {din, low_byte_buf};
 
-        for (idx = 1; idx < Taps; idx++) begin
-          samples[idx] <= samples[idx-1];
+        for (s_idx = 1; s_idx < Taps; s_idx++) begin
+          samples[s_idx] <= samples[s_idx-1];
         end
       end
     end
