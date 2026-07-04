@@ -22,7 +22,7 @@ module tt_um_tpcannon7_fir (
   assign uio_oe = 8'b00011000;
 
   fir_filter #(
-      .Taps(32)
+      .Taps(16)
   ) fir (
       .clk(clk),
       .rst_n(rst_n),

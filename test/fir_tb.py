@@ -19,7 +19,7 @@ import math
 clock_period = 40
 
 # params
-taps = 32
+taps = 16
 coeff_width = 16
 sample_width = 16
 
