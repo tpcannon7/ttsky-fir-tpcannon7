@@ -19,7 +19,7 @@ import math
 clock_period = 40
 
 # params
-taps = 16
+taps = 32
 coeff_width = 16
 sample_width = 16
 
@@ -265,7 +265,9 @@ async def test_noisy_sine(dut):
     cocotb.log.info(f"fixed coeffs = {coeffs}")
 
     # sine wave + noise (1 KHz)
-    ts = np.linspace(0, 5, 100)
+    duration = 0.001
+    n_samples = int(fs * duration)
+    ts = np.linspace(0,duration,n_samples, endpoint=False)
     ys = np.sin(2*np.pi * 1000.0 * ts)
     yerr = 0.5 * np.random.normal(size=len(ts))
     yraw = ys + yerr
