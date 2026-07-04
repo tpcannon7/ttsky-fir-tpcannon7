@@ -1,7 +1,7 @@
 import cocotb
 from cocotb.triggers import RisingEdge, FallingEdge, Timer, ReadOnly, ClockCycles
 from cocotb.clock import Clock
-from scipy.signal import firwin, lfilter
+from scipy.signal import firwin, lfilter, chirp, freqz
 import numpy as np
 import matplotlib.pyplot as plt
 import math
@@ -9,7 +9,8 @@ import math
 
 # TODO: add more tests!
 # reset during compute
-# verify handshake works by streaming inputs
+# check loading during compute/mid input?
+# need more tests for TEST state with static test vectors on chip
 
 # clock perod (ns)
 clock_period = 40
@@ -19,13 +20,18 @@ taps = 16
 coeff_width = 16
 sample_width = 16
 
+# max/min values for bit widths
 min_val = -(2**(coeff_width-1))
 max_val = (2**(coeff_width-1)-1)
 normalize = ((2**(coeff_width-1)))
 
 # Hz
 fc = 10000
-fs = 32000
+# 21 cycles for 16 taps, 13 for 8 taps (taps + 5 = comp time + byte handling)
+fs = (1 / (clock_period * 1e-9)) / (taps + 5) 
+
+global_cycles = 0
+output_done_cycles = []
 
 # bidirect pins
 LOAD_EN = 0x01
@@ -34,6 +40,12 @@ OUT_READY = 0x04
 IN_READY = 0x08
 OUT_VALID = 0x10
 BYTE_EN = 0x20
+
+async def cycle_counter(dut):
+    global global_cycles
+    while True:
+        await RisingEdge(dut.clk)
+        global_cycles += 1
 
 async def reset(dut):
     dut.ui_in.value = 0x00
@@ -58,6 +70,7 @@ async def load_coeff(dut, coeffs):
                     await RisingEdge(dut.clk)
 
         dut.uio_in.value = 0x00
+        await RisingEdge(dut.clk)
 
     elif(coeff_width == 16):
         for coeff in coeffs:
@@ -83,6 +96,7 @@ async def load_coeff(dut, coeffs):
                 await RisingEdge(dut.clk)
         
         dut.uio_in.value = 0x00
+        await RisingEdge(dut.clk)
 
 async def load_sample(dut, sample):
     if (sample_width == 8):
@@ -115,6 +129,7 @@ async def load_sample(dut, sample):
 
         dut.ui_in.value = 0x00
         dut.uio_in.value = 0x00
+        await RisingEdge(dut.clk)
 
 async def read_output(dut):
     if (sample_width == 8):
@@ -148,7 +163,9 @@ async def read_output(dut):
 
         out_high = dut.uo_out.value.to_unsigned()
         dut.uio_in.value = 0x00
-        
+
+        await RisingEdge(dut.clk)
+
         result = ((out_high & 0xff) << 8) | (out_low & 0xff)
         if result & 0x8000:
             result -= 0x10000
@@ -187,7 +204,6 @@ async def test_impulse_response(dut):
         cocotb.log.info(f"res = {res}")
         cocotb.log.info(f"expected = {coeffs[idx]}")
         assert abs(res - coeffs[idx]) <= 5, f"{res} does not match in acceptable range to {coeffs[idx]}"
-
 
 @cocotb.test()
 async def test_step_response(dut):
@@ -234,6 +250,8 @@ async def test_noisy_sine(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
 
+    cocotb.start_soon(cycle_counter(dut))
+
     # generate coeffs
     h = firwin(taps, fc, fs=fs)
     cocotb.log.info(f"float coeffs = {h}")
@@ -249,15 +267,13 @@ async def test_noisy_sine(dut):
     yerr = 0.5 * np.random.normal(size=len(ts))
     yraw = ys + yerr
 
-    y_fir = []
+    y_dut = []
     samples = yraw * normalize
     samples = [max(min_val, min(max_val, int(round(s)))) for s in samples]
 
     # "true" filter
     samples_float = [s / float(normalize) for s in samples]
     y_lfilter = lfilter(h, 1.0, samples_float)
-
-
 
     cocotb.log.info("----------------------------------")
     cocotb.log.info("           NOISY SINE             ")
@@ -272,22 +288,105 @@ async def test_noisy_sine(dut):
         cocotb.log.info(f"sample {idx} = {s}")
 
         out = await read_output(dut)
+        output_done_cycles.append(global_cycles)
 
         cocotb.log.info(f"out = {out}")
         out = out / float(normalize)
-        y_fir.append(out)
+        y_dut.append(out)
 
     plt.plot(ts, yraw, 'k-')
     plt.plot(ts, y_lfilter, 'r-')
-    plt.plot(ts, y_fir, 'c-')
-    plt.legend(["raw","golden filter", "dut filter"])
-    plt.savefig('output.png')
+    plt.plot(ts, y_dut, 'c-')
+    plt.xlabel("Time (s)")
+    plt.ylabel("Amplitude")
+    plt.title("Noisy Sinusoid Filtering, DUT vs. Python model")
+    plt.legend(["raw","python filter", "dut filter"])
+    plt.savefig('noisy_sine_comparison.png')
 
     gold_rms = math.sqrt(sum(x**2 for x in y_lfilter) / len(y_lfilter))
-    dut_rms = math.sqrt(sum(x**2 for x in y_fir) / len(y_fir))
-    err_rms = math.sqrt(sum((g - d)**2 for g, d in zip(y_lfilter, y_fir)) / len(y_fir))
+    dut_rms = math.sqrt(sum(x**2 for x in y_dut) / len(y_dut))
+    err_rms = math.sqrt(sum((g - d)**2 for g, d in zip(y_lfilter, y_dut)) / len(y_dut))
     snr = 20.0 * math.log10(gold_rms / err_rms)
 
     assert snr > 30.0, f"SNR = {snr} below acceptable threshold"
-
     cocotb.log.info(f"SNR = {snr}")
+
+@cocotb.test()
+async def test_switching_inputs(dut):
+    clk = Clock(dut.clk, clock_period, "ns")
+    cocotb.start_soon(clk.start())
+
+    # generate coeffs
+    h = firwin(taps, fc, fs=fs)
+    cocotb.log.info(f"float coeffs = {h}")
+    
+    # fixed point
+    coeffs = h * normalize
+    coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
+    cocotb.log.info(f"fixed coeffs = {coeffs}")
+
+    samples = [max_val if i % 2 == 0 else min_val for i in range(taps*2)]
+    cocotb.log.info(f"samples = {samples}")
+
+    cocotb.log.info("----------------------------------")
+    cocotb.log.info("         SWITCHING INPUTS         ")
+    cocotb.log.info("----------------------------------")
+
+    await reset(dut)
+    await load_coeff(dut, coeffs)
+
+    outputs = []
+
+    for idx, s in enumerate(samples):
+        await load_sample(dut, s)
+        cocotb.log.info(f"sample {idx} = {s}")
+
+        o = await read_output(dut)
+        cocotb.log.info(f"out = {o}")
+        cocotb.log.info(f"float out = {o / float(normalize)}")
+        outputs.append(o)
+
+    output_diff = np.diff(outputs)
+    cocotb.log.info(f"output diffs = {output_diff}")
+
+    assert (np.all(output_diff[taps:] == 0)), f"output diff unexpected nonzero during switching"
+
+
+# this isnt a real test but more to verify the plots match closely
+@cocotb.test()
+async def test_frequency_response(dut):
+    clk = Clock(dut.clk, clock_period, "ns")
+    cocotb.start_soon(clk.start())
+
+    # generate coeffs
+    h = firwin(taps, fc, fs=fs)
+    cocotb.log.info(f"float coeffs = {h}")
+    
+    # fixed point
+    coeffs = h * normalize
+    coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
+    coeffs = [c / float(normalize) for c in coeffs]
+
+    w_dut, h_dut = freqz(coeffs, 1.0, fs=fs)
+    w_true, h_true = freqz(h, 1.0, fs=fs)
+
+    cocotb.log.info("----------------------------------")
+    cocotb.log.info("         FREQUENCY RESPONSE       ")
+    cocotb.log.info("----------------------------------")
+
+    plt.title("Frequency Response of DUT vs. Python Model")
+    plt.plot(w_dut, 20*np.log10(abs(h_dut)), 'r-')
+    plt.plot(w_true, 20*np.log10(abs(h_true)), 'c-' )
+    plt.axvline(fc, color='black', linestyle=':', linewidth=0.8)
+    plt.ylabel("Amplitude (dB)")
+    plt.xlabel("Frequency (Hz)")
+    plt.legend(["dut freq resp", "true freq response"])
+    plt.savefig('freq_response.png')
+
+@cocotb.test()
+async def test_reset_mid_sequence(dut):
+    pass
+
+@cocotb.test()
+async def test_load_mid_sequence(dut):
+    pass
