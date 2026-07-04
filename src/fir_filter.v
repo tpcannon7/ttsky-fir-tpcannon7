@@ -36,7 +36,7 @@ module fir_filter #(
 
   assign dout = acc[(out_byte_cnt*8)+:8];
 
-  localparam [2:0] Idle = 3'b000, LoadCoeff = 3'b001, Ready = 3'b010, Compute = 3'b011, Done = 3'b100;
+  localparam [2:0] Idle = 3'b000, LoadCoeff = 3'b001, Ready = 3'b010, Compute = 3'b011, Done = 3'b100, Test = 3'b101;
   reg [2:0] curr_st, next_st;
 
   // state machine
@@ -174,5 +174,18 @@ module fir_filter #(
       out_byte_cnt <= 0;
     end
   end
+
+
+  // on chip test module
+  wire signed [7:0] test_output;
+  on_chip_test #(
+      .Taps(Taps),
+      .SampleWidth(SampleWidth),
+      .CoeffWidth(CoeffWidth)
+  ) test_module (
+      .clk  (clk),
+      .rst_n(rst_n),
+      .out  (test_output)
+  );
 
 endmodule

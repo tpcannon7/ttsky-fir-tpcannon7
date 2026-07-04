@@ -429,3 +429,8 @@ async def test_reset_mid_sequence(dut):
 @cocotb.test()
 async def test_load_mid_sequence(dut):
     pass
+
+
+@cocotb.test()
+async def test_full_handshake_no_helpers(dut):
+    pass
