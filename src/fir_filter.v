@@ -30,10 +30,9 @@ module fir_filter #(
   assign out_handshake = out_ready && out_valid;
   assign in_handshake  = in_ready && in_valid;
 
-  wire mac_cnt_full, out_byte_cnt_full, coeff_idx_full;
+  wire mac_cnt_full, out_byte_cnt_full;
   assign mac_cnt_full = {1'b0, mac_idx} == Taps[$clog2(Taps):0] - 1'b1;
   assign out_byte_cnt_full = {1'b0, out_byte_cnt} == OutBytes[$clog2(OutBytes):0] - 1'b1;
-  assign coeff_idx_full = {1'b0, coeff_idx} == Taps[$clog2(Taps):0] - 1'b1;
 
   assign dout = acc[(out_byte_cnt*8)+:8];
 
@@ -97,19 +96,6 @@ module fir_filter #(
     end
   end
 
-  reg [$clog2(Taps)-1:0] coeff_idx;
-  always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
-      coeff_idx <= 0;
-    end else if (curr_st == LoadCoeff) begin
-      if (in_handshake && byte_en && !coeff_idx_full) begin
-        coeff_idx <= coeff_idx + 1'b1;
-      end
-    end else if (curr_st != LoadCoeff) begin
-      coeff_idx <= 0;
-    end
-  end
-
   reg signed [CoeffWidth-1:0] coeff[0:Taps-1];
   integer c_idx;
   always @(posedge clk or negedge rst_n) begin
@@ -119,7 +105,11 @@ module fir_filter #(
       end
     end else if (curr_st == LoadCoeff) begin
       if (in_handshake && byte_en) begin
-        coeff[coeff_idx] <= {din, low_byte_buf};
+        coeff[0] <= {din, low_byte_buf};
+
+        for (c_idx = 1; c_idx < Taps; c_idx++) begin
+          coeff[c_idx] <= coeff[c_idx-1];
+        end
       end
     end
   end

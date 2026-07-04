@@ -12,6 +12,9 @@ import math
 # check loading during compute/mid input?
 # need more tests for TEST state with static test vectors on chip
 
+# coeffs now load in same shift fashion as with the sampling
+# load N tap coeffcients first and tap 0 coeffcients last
+
 # clock perod (ns)
 clock_period = 40
 
@@ -73,7 +76,7 @@ async def load_coeff(dut, coeffs):
         await RisingEdge(dut.clk)
 
     elif(coeff_width == 16):
-        for coeff in coeffs:
+        for coeff in coeffs[::-1]:
             coeff_low = coeff & 0x00ff
             coeff_high = (coeff & 0xff00) >> 8
 
@@ -358,6 +361,8 @@ async def test_frequency_response(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
 
+    await reset(dut)
+
     # generate coeffs
     h = firwin(taps, fc, fs=fs)
     cocotb.log.info(f"float coeffs = {h}")
@@ -382,6 +387,38 @@ async def test_frequency_response(dut):
     plt.xlabel("Frequency (Hz)")
     plt.legend(["dut freq resp", "true freq response"])
     plt.savefig('freq_response.png')
+
+
+# test to verify new coeff shift reg works properly
+@cocotb.test()
+async def test_non_symmetric_coeff(dut):
+    clk = Clock(dut.clk, clock_period, "ns")
+    cocotb.start_soon(clk.start())
+
+    coeffs = [(i+1) / taps for i in range(taps)]
+    cocotb.log.info(f"coeffs = {coeffs}")
+
+    coeffs = [c * normalize for c in coeffs]
+    coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
+    cocotb.log.info(f"fixed coeffs = {coeffs}")
+
+    samples = [(2**(sample_width-1))-1] + ([0] * (taps - 1))
+
+    await reset(dut)
+    await load_coeff(dut, coeffs)
+
+    outputs = []
+
+    for idx, s in enumerate(samples):
+        await load_sample(dut, s)
+        cocotb.log.info(f"sample {idx} = {s}")
+
+        out = await read_output(dut)
+        cocotb.log.info(f"out = {out}")
+
+        expected = coeffs[idx]
+
+        assert abs(out-expected) <= 10, f"{out} != {expected}, order incorrect"
 
 @cocotb.test()
 async def test_reset_mid_sequence(dut):
