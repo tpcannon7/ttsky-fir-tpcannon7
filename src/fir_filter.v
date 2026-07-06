@@ -9,7 +9,7 @@ module fir_filter #(
     input wire load,
     input wire in_valid,
     input wire out_ready,
-    input wire byte_en,
+    input wire byte_sel,
 
     output wire signed [7:0] dout,
     output wire out_valid,
@@ -36,7 +36,7 @@ module fir_filter #(
 
   assign dout = acc[(out_byte_cnt*8)+:8];
 
-  localparam [2:0] Idle = 3'b000, LoadCoeff = 3'b001, Ready = 3'b010, Compute = 3'b011, Done = 3'b100, Test = 3'b101;
+  localparam [2:0] Idle = 3'b000, LoadCoeff = 3'b001, Ready = 3'b010, Compute = 3'b011, Done = 3'b100;
   reg [2:0] curr_st, next_st;
 
   // state machine
@@ -65,7 +65,7 @@ module fir_filter #(
         end
       end
       Ready: begin
-        if (in_handshake && byte_en) begin
+        if (in_handshake && byte_sel) begin
           next_st = Compute;
         end else if (load) begin
           next_st = LoadCoeff;
@@ -91,7 +91,7 @@ module fir_filter #(
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       low_byte_buf <= 0;
-    end else if (in_handshake && !byte_en) begin
+    end else if (in_handshake && !byte_sel) begin
       low_byte_buf <= din;
     end
   end
@@ -104,7 +104,7 @@ module fir_filter #(
         coeff[c_idx] <= 0;
       end
     end else if (curr_st == LoadCoeff) begin
-      if (in_handshake && byte_en) begin
+      if (in_handshake && byte_sel) begin
         coeff[0] <= {din, low_byte_buf};
 
         for (c_idx = 1; c_idx < Taps; c_idx++) begin
@@ -122,7 +122,7 @@ module fir_filter #(
         samples[s_idx] <= 0;
       end
     end else if (curr_st == Ready) begin
-      if (in_handshake && byte_en) begin
+      if (in_handshake && byte_sel) begin
         samples[0] <= {din, low_byte_buf};
 
         for (s_idx = 1; s_idx < Taps; s_idx++) begin
@@ -174,18 +174,5 @@ module fir_filter #(
       out_byte_cnt <= 0;
     end
   end
-
-
-  // on chip test module
-  wire signed [7:0] test_output;
-  on_chip_test #(
-      .Taps(Taps),
-      .SampleWidth(SampleWidth),
-      .CoeffWidth(CoeffWidth)
-  ) test_module (
-      .clk  (clk),
-      .rst_n(rst_n),
-      .out  (test_output)
-  );
 
 endmodule

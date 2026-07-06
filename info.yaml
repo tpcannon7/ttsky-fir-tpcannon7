@@ -51,9 +51,9 @@ pinout:
   uio[2]: "out_ready" #input
   uio[3]: "in_ready" #output
   uio[4]: "out_valid" # output
-  uio[5]: "byte_en" # input
-  uio[6]: ""
-  uio[7]: ""
+  uio[5]: "byte_sel" # input
+  uio[6]: "test_en" # input
+  uio[7]: "test_pass" # output
 
 # Do not change!
 yaml_version: 6

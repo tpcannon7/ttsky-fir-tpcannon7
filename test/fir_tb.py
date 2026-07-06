@@ -42,7 +42,8 @@ IN_VALID = 0x02
 OUT_READY = 0x04
 IN_READY = 0x08
 OUT_VALID = 0x10
-BYTE_EN = 0x20
+BYTE_SEL = 0x20
+TEST_EN = 0x40
 
 async def cycle_counter(dut):
     global global_cycles
@@ -89,7 +90,7 @@ async def load_coeff(dut, coeffs):
                 #cocotb.log.info("waiting low byte coeff")
                 await RisingEdge(dut.clk)
 
-            dut.uio_in.value = LOAD_EN | IN_VALID | BYTE_EN
+            dut.uio_in.value = LOAD_EN | IN_VALID | BYTE_SEL
             dut.ui_in.value = coeff_high
 
             # wait for in_ready, high byte
@@ -121,7 +122,7 @@ async def load_sample(dut, sample):
             #cocotb.log.info("waiting low byte sample")
             await RisingEdge(dut.clk)
 
-        dut.uio_in.value = IN_VALID | BYTE_EN
+        dut.uio_in.value = IN_VALID | BYTE_SEL
         dut.ui_in.value = sample_high
 
         # wait for in_ready, high_byte
@@ -422,15 +423,23 @@ async def test_non_symmetric_coeff(dut):
 
         assert abs(out-expected) <= 10, f"{out} != {expected}, order incorrect"
 
-@cocotb.test()
-async def test_reset_mid_sequence(dut):
-    pass
 
 @cocotb.test()
-async def test_load_mid_sequence(dut):
-    pass
+async def test_on_chip_test_mode(dut):
+    clk = Clock(dut.clk, clock_period, "ns")
+    cocotb.start_soon(clk.start())
+
+    await reset(dut)
+
+# @cocotb.test()
+# async def test_reset_mid_sequence(dut):
+#     pass
+
+# @cocotb.test()
+# async def test_load_mid_sequence(dut):
+#     pass
 
 
-@cocotb.test()
-async def test_full_handshake_no_helpers(dut):
-    pass
+# @cocotb.test()
+# async def test_full_handshake_no_helpers(dut):
+#     pass
