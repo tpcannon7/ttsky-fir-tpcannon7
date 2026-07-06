@@ -40,6 +40,8 @@ module on_chip_test #(
   // fix the sync issues from using async pins on rp2040
   // double flop synchronize control signals, fix byte_sel pulse issue that stems from same async pin issue
   // finish the test module
+  // need to also change load signal to a pulse to start load state not beign held high the whole time
+  // see markdown file in the other chat for further notes
   // ----------------->
   ///////
 
