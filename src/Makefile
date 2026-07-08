@@ -1,8 +1,8 @@
 SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
 FST ?= -fst
-VERILOG_SOURCES += spi.v
-COCOTB_TOPLEVEL = spi
+VERILOG_SOURCES += spi_slave.v
+COCOTB_TOPLEVEL = spi_slave
 COCOTB_TEST_MODULES = spi_tb
 
 COCOTB_HDL_TIMEUNIT = 1ns

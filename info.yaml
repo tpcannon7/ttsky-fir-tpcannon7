@@ -20,7 +20,7 @@ project:
     - "tt_um_tpcannon7_fir.v"
     - "fir_filter.v"
     - "trunc_mult.v"
-    - "spi.v"
+    - "spi_slave.v"
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
 # This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).

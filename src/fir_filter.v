@@ -40,7 +40,7 @@ module fir_filter #(
   reg [2:0] curr_st, next_st;
 
   // state machine
-  always @(posedge clk or negedge rst_n) begin
+  always @(posedge clk or negedge rst_n) begin : reg_curr_state
     if (~rst_n) begin
       curr_st <= Idle;
     end else begin
@@ -49,7 +49,7 @@ module fir_filter #(
   end
 
   // next state
-  always @(*) begin
+  always @(*) begin : comb_next_state
     next_st = curr_st;
     case (curr_st)
       Idle: begin
@@ -88,7 +88,7 @@ module fir_filter #(
   end
 
   reg signed [(SampleWidth/2)-1:0] low_byte_buf;
-  always @(posedge clk or negedge rst_n) begin
+  always @(posedge clk or negedge rst_n) begin : reg_low_byte_buf
     if (~rst_n) begin
       low_byte_buf <= 0;
     end else if (in_handshake && !byte_sel) begin
@@ -98,7 +98,7 @@ module fir_filter #(
 
   reg signed [CoeffWidth-1:0] coeff[0:Taps-1];
   integer c_idx;
-  always @(posedge clk or negedge rst_n) begin
+  always @(posedge clk or negedge rst_n) begin : shift_reg_coeff_line
     if (~rst_n) begin
       for (c_idx = 0; c_idx < Taps; c_idx++) begin
         coeff[c_idx] <= 0;
@@ -116,7 +116,7 @@ module fir_filter #(
 
   reg signed [SampleWidth-1:0] samples[0:Taps-1];
   integer s_idx;
-  always @(posedge clk or negedge rst_n) begin
+  always @(posedge clk or negedge rst_n) begin : shift_reg_sample_line
     if (~rst_n) begin
       for (s_idx = 0; s_idx < Taps; s_idx++) begin
         samples[s_idx] <= 0;
@@ -133,7 +133,7 @@ module fir_filter #(
   end
 
   reg [$clog2(Taps)-1:0] mac_idx;
-  always @(posedge clk or negedge rst_n) begin
+  always @(posedge clk or negedge rst_n) begin : mac_idx_counter
     if (~rst_n) begin
       mac_idx <= 0;
     end else if (curr_st == Compute) begin
@@ -144,7 +144,7 @@ module fir_filter #(
   end
 
   reg signed [AccWidth-1:0] acc;
-  always @(posedge clk or negedge rst_n) begin
+  always @(posedge clk or negedge rst_n) begin : reg_mac_accumulator
     if (~rst_n) begin
       acc <= 0;
     end else if (curr_st != Compute && curr_st != Done) begin
@@ -165,7 +165,7 @@ module fir_filter #(
   );
 
   reg [OutCntWidth-1:0] out_byte_cnt;
-  always @(posedge clk or negedge rst_n) begin
+  always @(posedge clk or negedge rst_n) begin : out_byte_counter
     if (~rst_n) begin
       out_byte_cnt <= 0;
     end else if (curr_st == Done && out_handshake && !out_byte_cnt_full) begin

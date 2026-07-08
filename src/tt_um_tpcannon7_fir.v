@@ -26,14 +26,14 @@ module tt_um_tpcannon7_fir (
   ) fir (
       .clk(clk),
       .rst_n(rst_n),
-      .din(din_eff),
+      .din(uo_out),
       .dout(uo_out),
-      .load(load_en_eff),
-      .in_valid(in_valid_eff),
-      .out_ready(out_ready_eff),
+      .load(uio_in[0]),
+      .in_valid(uio_in[1]),
+      .out_ready(uio_in[2]),
       .in_ready(uio_out[3]),
       .out_valid(uio_out[4]),
-      .byte_sel(byte_sel_eff)
+      .byte_sel(uio_in[5])
   );
 
 
