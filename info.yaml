@@ -21,6 +21,7 @@ project:
     - "fir_filter.v"
     - "trunc_mult.v"
     - "spi_slave.v"
+    - "control.v"
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
 # This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
@@ -46,10 +47,10 @@ pinout:
   uo[7]: ""
 
   # Bidirectional pins
-  uio[0]: "CS" 
+  uio[0]: "CS_N" 
   uio[1]: "MOSI" 
   uio[2]: "MISO" 
-  uio[3]: "SCK" 
+  uio[3]: "SCLK" 
   uio[4]: "" 
   uio[5]: "" 
   uio[6]: "" 

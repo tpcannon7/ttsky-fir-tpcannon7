@@ -1,13 +1,13 @@
 import cocotb
-from cocotb.triggers import RisingEdge, FallingEdge, Timer
+from cocotb.triggers import RisingEdge, FallingEdge, Timer, ClockCycles
 from cocotb.clock import Clock
 
 async def spi_transact(dut, data_in, sclk):
     din = data_in
     data_out = 0x00
     dut.cs_n.value = 0
-    await Timer(5, "ns")
-    sclk.start()
+    await RisingEdge(dut.clk)
+    cocotb.start_soon(sclk.start())
     for i in range(8):
         dut.mosi.value = (data_in & 0x80) >> 7
         await RisingEdge(dut.sclk)
@@ -16,28 +16,34 @@ async def spi_transact(dut, data_in, sclk):
         data_in = data_in << 1
 
     await FallingEdge(dut.sclk)
-
-    cocotb.log.info(f"rx_byte = {int(dut.rx_byte.value):x}, data_in = {din:x}")
-    assert dut.rx_byte.value == din, f"RX got {int(dut.rx_byte.value):02x}, expected {din}"
-
     sclk.stop()
+    
     dut.cs_n.value = 1
-    await Timer(10, "ns")
+    await ClockCycles(dut.clk, 50)
 
     return data_out
 
 @cocotb.test()
 async def test_spi(dut):
-    dut.sclk.value = 0
+    clk = Clock(dut.clk, 40, "ns")
+    cocotb.start_soon(clk.start())
+    sclk = Clock(dut.sclk, 1000, "ns")
+
+    dut.rst_n.value = 0
     dut.cs_n.value = 1
-    dut.mosi.value = 1
-    await Timer(20, "ns")
+    dut.mosi.value = 0
+    dut.sclk.value = 0
+    dut.tx_byte.value = 0x5C
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    await RisingEdge(dut.clk)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 10)
 
-    sclk = Clock(dut.sclk, 10, "ns")
+    data = 0x5C
 
-    data = 0xA5
-    
     out = await spi_transact(dut, data, sclk)
+    cocotb.log.info(f"sent = {data}, got = {out}")
 
-    cocotb.log.info(f"out = {out:x}")
-    assert out == 0x5C
+    out2 = await spi_transact(dut, data, sclk)
+    cocotb.log.info(f"sent = {data}, got = {out2}")

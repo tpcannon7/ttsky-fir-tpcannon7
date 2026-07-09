@@ -17,9 +17,12 @@ module tt_um_tpcannon7_fir (
 );
 
   // All output pins must be assigned. If not used, assign to 0.
-  assign uio_out[6:5] = 0;
-  assign uio_out[2:0] = 0;
-  assign uio_oe = 8'b10011000;
+  assign uio_out[7:3] = 0;
+  assign uio_out[1:0] = 0;
+  assign uio_oe = 8'b00000100;
+
+  wire fir_in_ready, fir_out_valid;
+  wire control_load_en, control_in_valid, control_byte_sel, control_out_ready;
 
   fir_filter #(
       .Taps(16)
@@ -28,17 +31,27 @@ module tt_um_tpcannon7_fir (
       .rst_n(rst_n),
       .din(uo_out),
       .dout(uo_out),
-      .load(uio_in[0]),
-      .in_valid(uio_in[1]),
-      .out_ready(uio_in[2]),
-      .in_ready(uio_out[3]),
-      .out_valid(uio_out[4]),
-      .byte_sel(uio_in[5])
+      .load(control_load_en),
+      .in_valid(control_in_valid),
+      .out_ready(control_out_ready),
+      .in_ready(fir_in_ready),
+      .out_valid(fir_out_valid),
+      .byte_sel(control_byte_sel)
   );
 
-
+  wire [7:0] spi_tx_byte, spi_rx_byte;
+  spi_slave spi (
+      .clk(clk),
+      .rst_n(rst_n),
+      .cs_n(uio_in[0]),
+      .mosi(uio_in[1]),
+      .miso(uio_out[2]),
+      .sclk(uio_in[3]),
+      .rx_byte(spi_rx_byte),
+      .tx_byte(spi_tx_byte)
+  );
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{uio_in[7], uio_in[4:3], ena, 1'b0};
+  wire _unused = &{uio_in[7:4], uio_in[2], ena, 1'b0};
 
 endmodule
