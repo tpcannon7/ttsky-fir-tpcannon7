@@ -15,6 +15,14 @@ module spi_slave (
     output wire [7:0] rx_byte
 );
 
+
+  // decide between doing command byte + data byte in a frame
+  // or byte per frame of cs_n
+
+  // cmd byte + data byte? | cs_n | cmd byte + data byte | ...
+  // | cmd byte | cs_n | data byte | cs_n | cmd byte | cs_n |...
+  // could do like 16 bit cmd transfer then send next coeffceint/sample idk
+
   wire sclk_rising, cs_n_rising;
   wire sclk_falling, cs_n_falling;
 
