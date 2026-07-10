@@ -5,38 +5,34 @@ module fir_filter #(
 ) (
     input wire clk,
     input wire rst_n,
-    input wire signed [7:0] din,
-    input wire load,
+    input wire signed [15:0] din,
+    input wire mode,
     input wire in_valid,
     input wire out_ready,
-    input wire byte_sel,
 
-    output wire signed [7:0] dout,
+    output wire signed [15:0] dout,
     output wire out_valid,
     output wire in_ready
 );
 
   localparam SampleWidth = 16;
   localparam CoeffWidth = 16;
-  localparam OutBytes = SampleWidth / 8;
-  localparam OutCntWidth = OutBytes <= 1 ? 1 : $clog2(OutBytes);
   // AccWidth depends on output width from trunc_mult 
   localparam AccWidth = ((SampleWidth + CoeffWidth) - (CoeffWidth - 1)) + $clog2(Taps);
 
   assign out_valid = (curr_st == Done);
-  assign in_ready  = (curr_st == Ready) || (curr_st == LoadCoeff);
+  assign in_ready  = (curr_st == Ready);
 
   wire out_handshake, in_handshake;
   assign out_handshake = out_ready && out_valid;
   assign in_handshake  = in_ready && in_valid;
 
-  wire mac_cnt_full, out_byte_cnt_full;
+  wire mac_cnt_full;
   assign mac_cnt_full = {1'b0, mac_idx} == Taps[$clog2(Taps):0] - 1'b1;
-  assign out_byte_cnt_full = {1'b0, out_byte_cnt} == OutBytes[$clog2(OutBytes):0] - 1'b1;
 
-  assign dout = acc[(out_byte_cnt*8)+:8];
+  assign dout = acc[15:0];
 
-  localparam [2:0] Idle = 3'b000, LoadCoeff = 3'b001, Ready = 3'b010, Compute = 3'b011, Done = 3'b100;
+  localparam [2:0] Idle = 3'b000, Ready = 3'b010, Compute = 3'b011, Done = 3'b100;
   reg [2:0] curr_st, next_st;
 
   // state machine
@@ -53,22 +49,13 @@ module fir_filter #(
     next_st = curr_st;
     case (curr_st)
       Idle: begin
-        if (load) begin
-          next_st = LoadCoeff;
-        end
-      end
-      LoadCoeff: begin
-        if (load) begin
-          next_st = LoadCoeff;
-        end else begin
-          next_st = Ready;
-        end
+        next_st = Ready;
       end
       Ready: begin
-        if (in_handshake && byte_sel) begin
+        if (in_handshake && ~mode) begin
           next_st = Compute;
-        end else if (load) begin
-          next_st = LoadCoeff;
+        end else if (in_handshake && mode) begin
+          next_st = Done;  // coeff loaded, no output to show
         end
       end
       Compute: begin
@@ -77,7 +64,7 @@ module fir_filter #(
         end
       end
       Done: begin
-        if (out_byte_cnt_full && out_handshake) begin
+        if (out_handshake) begin
           next_st = Ready;
         end
       end
@@ -87,15 +74,6 @@ module fir_filter #(
     endcase
   end
 
-  reg signed [(SampleWidth/2)-1:0] low_byte_buf;
-  always @(posedge clk or negedge rst_n) begin : reg_low_byte_buf
-    if (~rst_n) begin
-      low_byte_buf <= 0;
-    end else if (in_handshake && !byte_sel) begin
-      low_byte_buf <= din;
-    end
-  end
-
   reg signed [CoeffWidth-1:0] coeff[0:Taps-1];
   integer c_idx;
   always @(posedge clk or negedge rst_n) begin : shift_reg_coeff_line
@@ -103,13 +81,11 @@ module fir_filter #(
       for (c_idx = 0; c_idx < Taps; c_idx++) begin
         coeff[c_idx] <= 0;
       end
-    end else if (curr_st == LoadCoeff) begin
-      if (in_handshake && byte_sel) begin
-        coeff[0] <= {din, low_byte_buf};
+    end else if (in_handshake && mode) begin
+      coeff[0] <= din;
 
-        for (c_idx = 1; c_idx < Taps; c_idx++) begin
-          coeff[c_idx] <= coeff[c_idx-1];
-        end
+      for (c_idx = 1; c_idx < Taps; c_idx++) begin
+        coeff[c_idx] <= coeff[c_idx-1];
       end
     end
   end
@@ -121,13 +97,11 @@ module fir_filter #(
       for (s_idx = 0; s_idx < Taps; s_idx++) begin
         samples[s_idx] <= 0;
       end
-    end else if (curr_st == Ready) begin
-      if (in_handshake && byte_sel) begin
-        samples[0] <= {din, low_byte_buf};
+    end else if (in_handshake && ~mode) begin
+      samples[0] <= din;
 
-        for (s_idx = 1; s_idx < Taps; s_idx++) begin
-          samples[s_idx] <= samples[s_idx-1];
-        end
+      for (s_idx = 1; s_idx < Taps; s_idx++) begin
+        samples[s_idx] <= samples[s_idx-1];
       end
     end
   end
@@ -163,16 +137,5 @@ module fir_filter #(
       .b  (coeff[mac_idx]),
       .out(trunc_out)
   );
-
-  reg [OutCntWidth-1:0] out_byte_cnt;
-  always @(posedge clk or negedge rst_n) begin : out_byte_counter
-    if (~rst_n) begin
-      out_byte_cnt <= 0;
-    end else if (curr_st == Done && out_handshake && !out_byte_cnt_full) begin
-      out_byte_cnt <= out_byte_cnt + 1'b1;
-    end else if (curr_st != Done) begin
-      out_byte_cnt <= 0;
-    end
-  end
 
 endmodule

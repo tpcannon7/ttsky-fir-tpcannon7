@@ -8,8 +8,8 @@ async def spi_transact(dut, data_in, sclk):
     dut.cs_n.value = 0
     await RisingEdge(dut.clk)
     cocotb.start_soon(sclk.start())
-    for i in range(8):
-        dut.mosi.value = (data_in & 0x80) >> 7
+    for i in range(16):
+        dut.mosi.value = (data_in & 0x8000) >> 15
         await RisingEdge(dut.sclk)
         out = int(dut.miso.value)
         data_out = (data_out << 1) | out
@@ -19,7 +19,7 @@ async def spi_transact(dut, data_in, sclk):
     sclk.stop()
     
     dut.cs_n.value = 1
-    await ClockCycles(dut.clk, 50)
+    await ClockCycles(dut.clk, 25)
 
     return data_out
 
@@ -33,14 +33,14 @@ async def test_spi(dut):
     dut.cs_n.value = 1
     dut.mosi.value = 0
     dut.sclk.value = 0
-    dut.tx_byte.value = 0x5C
+    dut.tx_data_in.value = 0x5C5C
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
     dut.rst_n.value = 1
     await ClockCycles(dut.clk, 10)
 
-    data = 0x5C
+    data = 0x5C5C
 
     out = await spi_transact(dut, data, sclk)
     cocotb.log.info(f"sent = {data}, got = {out}")

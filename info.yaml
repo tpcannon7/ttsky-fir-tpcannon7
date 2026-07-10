@@ -27,7 +27,7 @@ project:
 # This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
 pinout:
   # Inputs
-  ui[0]: ""
+  ui[0]: "MODE" # high for samples in spi, low for coeff loading across spi; latch at falling cs_n
   ui[1]: ""
   ui[2]: ""
   ui[3]: ""

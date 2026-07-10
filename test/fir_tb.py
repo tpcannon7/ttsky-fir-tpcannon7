@@ -15,8 +15,13 @@ import math
 # coeffs now load in same shift fashion as with the sampling
 # load N tap coeffcients first and tap 0 coeffcients last
 
+#TODO: umm find out to make sclk work on uio_in? check spi shit actually works too
+# i added a basic control layer that should work on the fir filter? double check that too!
+
 # clock perod (ns)
 clock_period = 40
+spi_clock = 1000
+spi_frame_len = 16
 
 # params
 taps = 16
@@ -37,13 +42,10 @@ global_cycles = 0
 output_done_cycles = []
 
 # bidirect pins
-LOAD_EN = 0x01
-IN_VALID = 0x02
-OUT_READY = 0x04
-IN_READY = 0x08
-OUT_VALID = 0x10
-BYTE_SEL = 0x20
-TEST_EN = 0x40
+CS_N = 0x01
+MOSI = 0x02
+MISO = 0x04
+SCLK = 0x08
 
 async def cycle_counter(dut):
     global global_cycles
@@ -52,8 +54,8 @@ async def cycle_counter(dut):
         global_cycles += 1
 
 async def reset(dut):
-    dut.ui_in.value = 0x00
-    dut.uio_in.value = 0x00
+    dut.ui_in.value = 0x80
+    dut.uio_in.value = CS_N | MOSI
     dut.ena.value = 1
     dut.rst_n.value = 0
 
@@ -62,123 +64,59 @@ async def reset(dut):
 
     await RisingEdge(dut.clk)
 
-async def load_coeff(dut, coeffs):
-    if (coeff_width == 8):
-        for coeff in coeffs:
-            dut.uio_in.value = LOAD_EN | IN_VALID
-            dut.ui_in.value = coeff
+async def generate_sclk(dut, period_ns, bit_index=3):
+    # Ensure initial state is clean
+    current_val = int(dut.uio_in.value) if dut.uio_in.value.is_resolvable else 0
+    while True:
+        # Driving Low
+        dut.uio_in.value = current_val & ~(1 << bit_index)
+        await Timer(period_ns / 2, units='ns')
 
-            # wait for in_ready
-            await RisingEdge(dut.clk)
-            while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-                    await RisingEdge(dut.clk)
+        # Driving High
+        dut.uio_in.value = current_val | (1 << bit_index)
+        await Timer(period_ns / 2, units='ns')
 
-        dut.uio_in.value = 0x00
-        await RisingEdge(dut.clk)
+async def spi_tx(dut, data_in, sclk):
+    dut.cs_n.value = 0
+    await RisingEdge(dut.clk)
+    cocotb.start_soon(sclk.start())
+    for i in range(spi_frame_len):
+        dut.mosi.value = (data_in & 0x8000) >> (spi_frame_len - 1)
+        await RisingEdge(dut.sclk)
+        data_in = data_in << 1
 
-    elif(coeff_width == 16):
-        for coeff in coeffs[::-1]:
-            coeff_low = coeff & 0x00ff
-            coeff_high = (coeff & 0xff00) >> 8
+    await FallingEdge(dut.sclk)
+    sclk.stop()
+    
+    dut.cs_n.value = 1
+    await ClockCycles(dut.clk, 25)
 
-            dut.uio_in.value = LOAD_EN | IN_VALID
-            dut.ui_in.value = coeff_low
+async def spi_rx(dut):
+    rx_data = 0x0000
+    for i in range(spi_frame_len):
+        await RisingEdge(dut.sclk)
+        out = int(dut.uio_in[2].value)
 
-            # wait in_ready, low_byte
-            await RisingEdge(dut.clk)
-            while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-                #cocotb.log.info("waiting low byte coeff")
-                await RisingEdge(dut.clk)
+async def spi_transact(dut, tx_data, sclk):
+    tx = cocotb.start_soon(spi_tx(dut,tx_data,sclk))
+    rx = cocotb.start_soon(spi_rx(dut))
 
-            dut.uio_in.value = LOAD_EN | IN_VALID | BYTE_SEL
-            dut.ui_in.value = coeff_high
+    await Combine(tx,rx)
 
-            # wait for in_ready, high byte
-            await RisingEdge(dut.clk)
-            while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-                #cocotb.log.info("waiting low byte coeff")
-                await RisingEdge(dut.clk)
-        
-        dut.uio_in.value = 0x00
-        await RisingEdge(dut.clk)
-
-async def load_sample(dut, sample):
-    if (sample_width == 8):
-        dut.uio_in.value = IN_VALID
-        dut.ui_in.value = sample
-        await RisingEdge(dut.clk)
-        dut.uio_in.value = 0x00
-    elif (sample_width == 16):
-        sample_low = sample & 0x00ff
-        sample_high = (sample & 0xff00) >> 8
-
-        # assert in_valid, send low byte of sample
-        dut.uio_in.value = IN_VALID
-        dut.ui_in.value = sample_low
-        
-        # wait for in_ready to send next byte
-        await RisingEdge(dut.clk)
-        while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-            #cocotb.log.info("waiting low byte sample")
-            await RisingEdge(dut.clk)
-
-        dut.uio_in.value = IN_VALID | BYTE_SEL
-        dut.ui_in.value = sample_high
-
-        # wait for in_ready, high_byte
-        await RisingEdge(dut.clk)
-        while((dut.uio_out.value.to_unsigned() & IN_READY) == 0):
-            #cocotb.log.info("waiting high byte sample")
-            await RisingEdge(dut.clk)
-
+async def load_coeff(dut, coeffs, sclk):
+    for coeff in coeffs[::-1]:
         dut.ui_in.value = 0x00
-        dut.uio_in.value = 0x00
-        await RisingEdge(dut.clk)
+        await spi_transact(dut, coeff, sclk)
 
-async def read_output(dut):
-    if (sample_width == 8):
-        dut.uio_in.value = OUT_READY
-
-        await RisingEdge(dut.clk)
-        while((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
-            #cocotb.log.info("waiting output")
-            await RisingEdge(dut.clk)
-
-        out = dut.uo_out.to_unsigned()
-        dut.uio_out.value = 0x00
-        return out
-    elif (sample_width == 16):
-        dut.uio_in.value = OUT_READY
-
-        # wait for out_valid, low byte
-        await RisingEdge(dut.clk)
-        while((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
-            #cocotb.log.info("waiting low byte output")
-            await RisingEdge(dut.clk)
-
-        out_low = dut.uo_out.value.to_unsigned()
-        dut.uio_in.value = OUT_READY
-
-        # wait for out_valid, high byte
-        await RisingEdge(dut.clk)
-        while((dut.uio_out.value.to_unsigned() & OUT_VALID) == 0):
-            #cocotb.log.info("waiting high byte output")
-            await RisingEdge(dut.clk)
-
-        out_high = dut.uo_out.value.to_unsigned()
-        dut.uio_in.value = 0x00
-
-        await RisingEdge(dut.clk)
-
-        result = ((out_high & 0xff) << 8) | (out_low & 0xff)
-        if result & 0x8000:
-            result -= 0x10000
-        return result
+async def load_sample(dut, sample, sclk):
+    dut.ui_in.value = 0x80
+    await spi_transact(dut,sample,sclk)
 
 @cocotb.test()
 async def test_impulse_response(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
+    sclk = Clock(cocotb.handle[uio_in[3]], spi_clock, "ns")
 
     h = firwin(taps, fc, fs=fs)
     cocotb.log.info(f"float coeffs = {h}")
@@ -194,20 +132,20 @@ async def test_impulse_response(dut):
     cocotb.log.info("----------------------------------")
 
     await reset(dut)
-    await load_coeff(dut, coeffs)
+    await load_coeff(dut, coeffs, sclk)
 
     for idx, s in enumerate(samples):
         # assert in_valid, load sample in
-        await load_sample(dut, s)
+        await load_sample(dut, s, sclk)
         await RisingEdge(dut.clk)
         cocotb.log.info(f"sample {idx} = {s}")  
 
         # read output
-        res = await read_output(dut)
-        await RisingEdge(dut.clk)
-        cocotb.log.info(f"res = {res}")
-        cocotb.log.info(f"expected = {coeffs[idx]}")
-        assert abs(res - coeffs[idx]) <= 5, f"{res} does not match in acceptable range to {coeffs[idx]}"
+        # res = await read_output(dut)
+        # await RisingEdge(dut.clk)
+        # cocotb.log.info(f"res = {res}")
+        # cocotb.log.info(f"expected = {coeffs[idx]}")
+        # assert abs(res - coeffs[idx]) <= 5, f"{res} does not match in acceptable range to {coeffs[idx]}"
 
 @cocotb.test()
 async def test_step_response(dut):

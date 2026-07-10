@@ -22,24 +22,24 @@ module tt_um_tpcannon7_fir (
   assign uio_oe = 8'b00000100;
 
   wire fir_in_ready, fir_out_valid;
-  wire control_load_en, control_in_valid, control_byte_sel, control_out_ready;
+  wire control_filter_mode, control_in_valid, control_byte_sel, control_out_ready;
 
   fir_filter #(
       .Taps(16)
   ) fir (
       .clk(clk),
       .rst_n(rst_n),
-      .din(uo_out),
-      .dout(uo_out),
-      .load(control_load_en),
+      .din(filter_in),
+      .dout(filter_out),
+      .mode(control_filter_mode),
       .in_valid(control_in_valid),
       .out_ready(control_out_ready),
       .in_ready(fir_in_ready),
-      .out_valid(fir_out_valid),
-      .byte_sel(control_byte_sel)
+      .out_valid(fir_out_valid)
   );
 
-  wire [7:0] spi_tx_byte, spi_rx_byte;
+  wire [15:0] spi_tx_data, spi_rx_data;
+  wire spi_curr_frame_mode;
   spi_slave spi (
       .clk(clk),
       .rst_n(rst_n),
@@ -47,8 +47,20 @@ module tt_um_tpcannon7_fir (
       .mosi(uio_in[1]),
       .miso(uio_out[2]),
       .sclk(uio_in[3]),
-      .rx_byte(spi_rx_byte),
-      .tx_byte(spi_tx_byte)
+      .mode(ui_in[0]),  // add rest to unused?
+      .rx_data_out(spi_rx_data),
+      .tx_data_in(spi_tx_data),
+      .curr_frame_mode(spi_curr_frame_mode)
+  );
+
+  wire [15:0] filter_in, filter_out;
+  control control_layer (
+      .clk(clk),
+      .rst_n(rst_n),
+      .spi_rx_data(spi_rx_data),
+      .spi_tx_data(spi_tx_data),
+      .dout_fir(filter_out),
+      .din_fir(filter_in)
   );
 
   // List all unused inputs to prevent warnings
