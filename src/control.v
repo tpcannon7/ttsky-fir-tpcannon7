@@ -14,9 +14,7 @@ module control (
     input wire fir_out_valid,
     output wire control_out_ready,
     input wire fir_in_ready,
-    output wire control_in_valid,
-
-    output wire filter_mode
+    output wire control_in_valid
 );
 
   localparam [2:0] Idle = 3'b000, SpiRx = 3'b001, FirOutput = 3'b010;
@@ -26,10 +24,8 @@ module control (
   assign control_out_ready = (curr_st == FirOutput);
 
   wire fir_control_in_handshake, fir_control_out_handshake;
-  assign fir_control_in_handshake = control_in_valid && fir_in_ready;
+  assign fir_control_in_handshake  = control_in_valid && fir_in_ready;
   assign fir_control_out_handshake = control_out_ready && fir_out_valid;
-
-  assign filter_mode = spi_curr_frame_mode;
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin

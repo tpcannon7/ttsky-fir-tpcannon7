@@ -52,9 +52,9 @@ module fir_filter #(
         next_st = Ready;
       end
       Ready: begin
-        if (in_handshake && ~mode) begin
+        if (in_handshake && mode) begin
           next_st = Compute;
-        end else if (in_handshake && mode) begin
+        end else if (in_handshake && ~mode) begin
           next_st = Done;  // coeff loaded, no output to show
         end
       end

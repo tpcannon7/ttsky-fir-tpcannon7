@@ -63,9 +63,8 @@ module spi_slave (
   localparam [1:0] Idle = 2'b00, Busy = 2'b01, Done = 2'b10;
   reg [1:0] curr_st, next_st;
 
-  assign spi_done = curr_st == Done;
+  assign spi_done = (curr_st == Done);
   assign curr_frame_mode = curr_frame_mode_reg;
-
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
@@ -134,6 +133,8 @@ module spi_slave (
       tx_buf <= tx_data_in;
     end
   end
+
+  assign curr_frame_mode = curr_frame_mode_reg;
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin

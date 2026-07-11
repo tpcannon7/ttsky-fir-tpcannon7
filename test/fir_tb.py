@@ -1,5 +1,5 @@
 import cocotb
-from cocotb.triggers import RisingEdge, FallingEdge, Timer, ReadOnly, ClockCycles
+from cocotb.triggers import RisingEdge, FallingEdge, Timer, ClockCycles, Combine, ValueChange
 from cocotb.clock import Clock
 from scipy.signal import firwin, lfilter, chirp, freqz
 import numpy as np
@@ -54,8 +54,10 @@ async def cycle_counter(dut):
         global_cycles += 1
 
 async def reset(dut):
-    dut.ui_in.value = 0x80
-    dut.uio_in.value = CS_N | MOSI
+    dut.fir_mode.value = 1
+    dut.spi_clock.value = 0
+    dut.spi_cs_n.value = 1
+    dut.spi_mosi.value = 1
     dut.ena.value = 1
     dut.rst_n.value = 0
 
@@ -64,59 +66,43 @@ async def reset(dut):
 
     await RisingEdge(dut.clk)
 
-async def generate_sclk(dut, period_ns, bit_index=3):
-    # Ensure initial state is clean
-    current_val = int(dut.uio_in.value) if dut.uio_in.value.is_resolvable else 0
-    while True:
-        # Driving Low
-        dut.uio_in.value = current_val & ~(1 << bit_index)
-        await Timer(period_ns / 2, units='ns')
-
-        # Driving High
-        dut.uio_in.value = current_val | (1 << bit_index)
-        await Timer(period_ns / 2, units='ns')
-
-async def spi_tx(dut, data_in, sclk):
-    dut.cs_n.value = 0
+async def spi_transact(dut, data_in, sclk):
+    rx_data = 0x0000
+    dut.spi_cs_n.value = 0
     await RisingEdge(dut.clk)
     cocotb.start_soon(sclk.start())
     for i in range(spi_frame_len):
-        dut.mosi.value = (data_in & 0x8000) >> (spi_frame_len - 1)
-        await RisingEdge(dut.sclk)
-        data_in = data_in << 1
+        dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 1
+        await RisingEdge(dut.spi_clock)
+        out = int(dut.spi_miso.value)
+        rx_data = (rx_data << 1) | out
+        data_in = (data_in << 1) & 0xFFFF
 
-    await FallingEdge(dut.sclk)
+    await FallingEdge(dut.spi_clock)
     sclk.stop()
-    
-    dut.cs_n.value = 1
+    dut.spi_cs_n.value = 1
     await ClockCycles(dut.clk, 25)
 
-async def spi_rx(dut):
-    rx_data = 0x0000
-    for i in range(spi_frame_len):
-        await RisingEdge(dut.sclk)
-        out = int(dut.uio_in[2].value)
-
-async def spi_transact(dut, tx_data, sclk):
-    tx = cocotb.start_soon(spi_tx(dut,tx_data,sclk))
-    rx = cocotb.start_soon(spi_rx(dut))
-
-    await Combine(tx,rx)
+    rx_data &= 0xFFFF
+    if rx_data & 0x8000:
+        rx_data -= 0x10000        # proper 16-bit two's complement
+    return rx_data
 
 async def load_coeff(dut, coeffs, sclk):
     for coeff in coeffs[::-1]:
-        dut.ui_in.value = 0x00
-        await spi_transact(dut, coeff, sclk)
+        dut.fir_mode.value = 0
+        rx = await spi_transact(dut, coeff, sclk)
 
 async def load_sample(dut, sample, sclk):
-    dut.ui_in.value = 0x80
-    await spi_transact(dut,sample,sclk)
+    dut.fir_mode.value = 1
+    rx = await spi_transact(dut,sample,sclk)
+    return rx
 
 @cocotb.test()
 async def test_impulse_response(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
-    sclk = Clock(cocotb.handle[uio_in[3]], spi_clock, "ns")
+    sclk = Clock(dut.spi_clock, spi_clock, "ns")
 
     h = firwin(taps, fc, fs=fs)
     cocotb.log.info(f"float coeffs = {h}")
@@ -134,18 +120,18 @@ async def test_impulse_response(dut):
     await reset(dut)
     await load_coeff(dut, coeffs, sclk)
 
+    outputs = []
+
     for idx, s in enumerate(samples):
         # assert in_valid, load sample in
-        await load_sample(dut, s, sclk)
+        res = await load_sample(dut, s, sclk)
         await RisingEdge(dut.clk)
-        cocotb.log.info(f"sample {idx} = {s}")  
+        cocotb.log.info(f"sample {idx} = {s}")
+        outputs.append(res)
 
-        # read output
-        # res = await read_output(dut)
-        # await RisingEdge(dut.clk)
-        # cocotb.log.info(f"res = {res}")
-        # cocotb.log.info(f"expected = {coeffs[idx]}")
-        # assert abs(res - coeffs[idx]) <= 5, f"{res} does not match in acceptable range to {coeffs[idx]}"
+        #assert abs(res - coeffs[idx]) <= 5, f"{res} does not match in acceptable range to {coeffs[idx]}"
+
+    cocotb.log.info(outputs)
 
 @cocotb.test()
 async def test_step_response(dut):
