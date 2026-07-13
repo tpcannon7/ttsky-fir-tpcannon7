@@ -14,58 +14,35 @@ module control (
     input wire fir_out_valid,
     output wire control_out_ready,
     input wire fir_in_ready,
-    output wire control_in_valid
+    output wire control_in_valid,
+    output wire control_curr_frame_mode
 );
 
-  localparam [2:0] Idle = 3'b000, SpiRx = 3'b001, FirOutput = 3'b010;
-  reg [2:0] curr_st, next_st;
-
-  assign control_in_valid  = (curr_st == SpiRx);
-  assign control_out_ready = (curr_st == FirOutput);
+  assign control_in_valid  = rx_valid_reg;
+  assign control_out_ready = 1'b1;
 
   wire fir_control_in_handshake, fir_control_out_handshake;
   assign fir_control_in_handshake  = control_in_valid && fir_in_ready;
   assign fir_control_out_handshake = control_out_ready && fir_out_valid;
 
-  always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
-      curr_st <= Idle;
-    end else begin
-      curr_st <= next_st;
-    end
-  end
-
-  always @(*) begin
-    next_st = curr_st;
-    case (curr_st)
-      Idle: begin
-        if (spi_rx_valid) begin
-          next_st = SpiRx;
-        end
-      end
-      SpiRx: begin
-        if (fir_control_in_handshake) begin
-          next_st = FirOutput;
-        end
-      end
-      FirOutput: begin
-        if (fir_control_out_handshake) begin
-          next_st = Idle;
-        end
-      end
-      default: next_st = curr_st;
-    endcase
-  end
-
   reg [15:0] filter_out_buf, spi_in_buf;
+  reg curr_frame_mode;
+  reg rx_valid_reg;
 
   assign din_fir = spi_in_buf;
+  assign control_curr_frame_mode = curr_frame_mode;
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       spi_in_buf <= 0;
-    end else if (curr_st == SpiRx) begin
+      rx_valid_reg <= 1'b0;
+      curr_frame_mode <= 1'b0;
+    end else if (spi_rx_valid) begin
       spi_in_buf <= spi_rx_data;
+      rx_valid_reg <= spi_rx_valid;
+      curr_frame_mode <= spi_curr_frame_mode;
+    end else if (fir_control_in_handshake) begin
+      rx_valid_reg <= 1'b0;
     end
   end
 
@@ -74,10 +51,9 @@ module control (
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       filter_out_buf <= 0;
-    end else if (curr_st == FirOutput && fir_control_out_handshake) begin
+    end else if (fir_control_out_handshake) begin
       filter_out_buf <= dout_fir;
     end
   end
-
 
 endmodule

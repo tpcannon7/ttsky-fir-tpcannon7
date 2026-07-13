@@ -139,14 +139,19 @@ async def test_impulse_response(dut):
         cocotb.log.info(f"sample {idx} = {s}")
         outputs.append(res)
 
-        #assert abs(res - coeffs[idx]) <= 5, f"{res} does not match in acceptable range to {coeffs[idx]}"
+    
 
     nop_res = await load_sample(dut, 0x0000, sclk)
     outputs.append(nop_res)
-
+    cocotb.log.info(f"outputs (no trim) = {outputs}")
+    # trim first garbage frame
     outputs = outputs[1:]
+    cocotb.log.info(f"outputs (trim leading garbage frame) = {outputs}")
 
-    cocotb.log.info(outputs)
+    for idx, out in enumerate(outputs):
+        assert abs(out - coeffs[idx]) <= 5, f"{out} does not match in acceptable range to {coeffs[idx]}"
+
+
 
 @cocotb.test()
 async def test_step_response(dut):
@@ -269,6 +274,7 @@ async def test_noisy_sine(dut):
 async def test_switching_inputs(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
+    sclk = Clock(dut.spi_clock, spi_clock, "ns")
 
     # generate coeffs
     h = firwin(taps, fc, fs=fs)
@@ -287,18 +293,21 @@ async def test_switching_inputs(dut):
     cocotb.log.info("----------------------------------")
 
     await reset(dut)
-    await load_coeff(dut, coeffs)
+    await load_coeff(dut, coeffs, sclk)
 
     outputs = []
 
     for idx, s in enumerate(samples):
-        await load_sample(dut, s)
+        out = await load_sample(dut, s, sclk)
         cocotb.log.info(f"sample {idx} = {s}")
 
-        o = await read_output(dut)
-        cocotb.log.info(f"out = {o}")
-        cocotb.log.info(f"float out = {o / float(normalize)}")
-        outputs.append(o)
+        outputs.append(out)
+
+    nop_frame = await load_sample(dut, 0x0000, sclk)
+    outputs.append(nop_frame)
+    outputs = outputs[1:]
+
+    cocotb.log.info(f"outputs = {outputs}")
 
     output_diff = np.diff(outputs)
     cocotb.log.info(f"output diffs = {output_diff}")
@@ -345,6 +354,7 @@ async def test_frequency_response(dut):
 async def test_non_symmetric_coeff(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
+    sclk = Clock(dut.spi_clock, spi_clock, "ns")
 
     coeffs = [(i+1) / taps for i in range(taps)]
     cocotb.log.info(f"coeffs = {coeffs}")
@@ -356,20 +366,26 @@ async def test_non_symmetric_coeff(dut):
     samples = [(2**(sample_width-1))-1] + ([0] * (taps - 1))
 
     await reset(dut)
-    await load_coeff(dut, coeffs)
+    await load_coeff(dut, coeffs, sclk)
 
     outputs = []
 
     for idx, s in enumerate(samples):
-        await load_sample(dut, s)
+        out = await load_sample(dut, s, sclk)
         cocotb.log.info(f"sample {idx} = {s}")
-
-        out = await read_output(dut)
-        cocotb.log.info(f"out = {out}")
+        outputs.append(out)
 
         expected = coeffs[idx]
 
-        assert abs(out-expected) <= 10, f"{out} != {expected}, order incorrect"
+    nop_frame = await load_sample(dut, 0x0000, sclk)
+    outputs.append(nop_frame)
+    outputs = outputs[1:]
+
+    cocotb.log.info(f"outputs = {outputs}")
+    cocotb.log.info(f"expected = {coeffs}")
+
+    for idx, out in enumerate(outputs):
+        assert abs(out- coeffs[idx]) <= 10, f"{out} != {coeff[idx]}, order incorrect"
 
 # @cocotb.test()
 # async def test_reset_mid_sequence(dut):

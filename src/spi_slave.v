@@ -128,7 +128,7 @@ module spi_slave (
       tx_buf <= 0;
     end else if (curr_st == Busy && sclk_falling) begin
       tx_buf <= {tx_buf[SpiFrameWidth-2:0], 1'b0};
-    end else if (curr_st == Done) begin
+    end else if (cs_n_falling) begin
       tx_buf <= tx_data_in;
     end
   end
@@ -138,7 +138,7 @@ module spi_slave (
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       curr_frame_mode_reg <= 0;
-    end else if (cs_n_falling) begin
+    end else if (bit_cnt == SpiFrameWidth) begin
       curr_frame_mode_reg <= mode_sync[2];
     end else if (curr_st == Idle) begin
       curr_frame_mode_reg <= 0;

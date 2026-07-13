@@ -31,7 +31,7 @@ module tt_um_tpcannon7_fir (
       .rst_n(rst_n),
       .din(filter_in),
       .dout(filter_out),
-      .mode(spi_curr_frame_mode),
+      .mode(control_curr_frame_mode),
       .in_valid(control_in_valid),
       .out_ready(control_out_ready),
       .in_ready(fir_in_ready),
@@ -40,6 +40,8 @@ module tt_um_tpcannon7_fir (
 
   wire [15:0] spi_tx_data, spi_rx_data;
   wire spi_curr_frame_mode, spi_rx_valid;
+  wire control_curr_frame_mode;
+
   spi_slave spi (
       .clk(clk),
       .rst_n(rst_n),
@@ -67,7 +69,8 @@ module tt_um_tpcannon7_fir (
       .fir_out_valid(fir_out_valid),
       .control_out_ready(control_out_ready),
       .fir_in_ready(fir_in_ready),
-      .control_in_valid(control_in_valid)
+      .control_in_valid(control_in_valid),
+      .control_curr_frame_mode(control_curr_frame_mode)
   );
 
   // List all unused inputs to prevent warnings
