@@ -24,7 +24,7 @@ spi_clock = 1000
 spi_frame_len = 16
 
 # params
-taps = 16
+taps = 32
 coeff_width = 12
 sample_width = 12
 
