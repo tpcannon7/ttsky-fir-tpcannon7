@@ -39,7 +39,7 @@ module tt_um_tpcannon7_fir (
   );
 
   wire [15:0] spi_tx_data, spi_rx_data;
-  wire spi_curr_frame_mode, spi_done;
+  wire spi_curr_frame_mode, spi_rx_valid;
   spi_slave spi (
       .clk(clk),
       .rst_n(rst_n),
@@ -51,7 +51,7 @@ module tt_um_tpcannon7_fir (
       .rx_data_out(spi_rx_data),
       .tx_data_in(spi_tx_data),
       .curr_frame_mode(spi_curr_frame_mode),
-      .spi_done(spi_done)
+      .spi_rx_valid(spi_rx_valid)
   );
 
   wire [15:0] filter_in, filter_out;
@@ -62,7 +62,7 @@ module tt_um_tpcannon7_fir (
       .spi_tx_data(spi_tx_data),
       .dout_fir(filter_out),
       .din_fir(filter_in),
-      .spi_done(spi_done),
+      .spi_rx_valid(spi_rx_valid),
       .spi_curr_frame_mode(spi_curr_frame_mode),
       .fir_out_valid(fir_out_valid),
       .control_out_ready(control_out_ready),

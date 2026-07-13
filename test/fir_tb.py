@@ -62,36 +62,46 @@ async def reset(dut):
     dut.rst_n.value = 0
 
     await ClockCycles(dut.clk, 50)
+
     dut.rst_n.value = 1
 
     await RisingEdge(dut.clk)
 
 async def spi_transact(dut, data_in, sclk):
+    data_in = data_in & 0xFFFF
     rx_data = 0x0000
     dut.spi_cs_n.value = 0
+    dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 0x0001
     await RisingEdge(dut.clk)
-    cocotb.start_soon(sclk.start())
+    cocotb.start_soon(sclk.start(start_high=False))
     for i in range(spi_frame_len):
-        dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 1
         await RisingEdge(dut.spi_clock)
         out = int(dut.spi_miso.value)
         rx_data = (rx_data << 1) | out
-        data_in = (data_in << 1) & 0xFFFF
 
-    await FallingEdge(dut.spi_clock)
+        # shift mosi on falling edge
+        await FallingEdge(dut.spi_clock)
+        data_in = (data_in << 1) & 0xFFFF
+        dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 0x0001
+    
+
     sclk.stop()
     dut.spi_cs_n.value = 1
     await ClockCycles(dut.clk, 25)
 
     rx_data &= 0xFFFF
     if rx_data & 0x8000:
-        rx_data -= 0x10000        # proper 16-bit two's complement
+        rx_data -= 0x10000
     return rx_data
 
 async def load_coeff(dut, coeffs, sclk):
+    # can also reduce # of sync flops? think about it
+    dut.fir_mode.value = 0
+    await RisingEdge(dut.clk)
     for coeff in coeffs[::-1]:
-        dut.fir_mode.value = 0
         rx = await spi_transact(dut, coeff, sclk)
+
+    dut.fir_mode.value = 1
 
 async def load_sample(dut, sample, sclk):
     dut.fir_mode.value = 1
@@ -111,7 +121,7 @@ async def test_impulse_response(dut):
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
     cocotb.log.info(f"fixed coeffs = {coeffs}")
 
-    samples = [(2**(sample_width-1))-1] + ([0] * (taps - 1))
+    samples = [max_val] + ([0] * (taps - 1))
 
     cocotb.log.info("----------------------------------")
     cocotb.log.info("         IMPULSE RESPONSE         ")
@@ -131,12 +141,18 @@ async def test_impulse_response(dut):
 
         #assert abs(res - coeffs[idx]) <= 5, f"{res} does not match in acceptable range to {coeffs[idx]}"
 
+    nop_res = await load_sample(dut, 0x0000, sclk)
+    outputs.append(nop_res)
+
+    outputs = outputs[1:]
+
     cocotb.log.info(outputs)
 
 @cocotb.test()
 async def test_step_response(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
+    sclk = Clock(dut.spi_clock, spi_clock, "ns")
 
     # generate coeffs
     h = firwin(taps, fc, fs=fs)
@@ -155,17 +171,17 @@ async def test_step_response(dut):
     cocotb.log.info("----------------------------------")
 
     await reset(dut)
-    await load_coeff(dut, coeffs)
+    await load_coeff(dut, coeffs,sclk)
 
     out = 0
 
     for idx, s in enumerate(samples):
         # load sample in
-        await load_sample(dut, s)
+        out = await load_sample(dut, s,sclk)
         cocotb.log.info(f"sample {idx} = {s}")
 
-        # take sample out
-        out = await read_output(dut)   
+    nop_frame = await load_sample(dut, s, sclk)
+    out = nop_frame
 
     expected = sum(coeffs)
     cocotb.log.info(f"out = {out}")
@@ -177,6 +193,7 @@ async def test_step_response(dut):
 async def test_noisy_sine(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
+    sclk = Clock(dut.spi_clock, spi_clock, "ns")
 
     cocotb.start_soon(cycle_counter(dut))
 
@@ -210,19 +227,26 @@ async def test_noisy_sine(dut):
     cocotb.log.info("----------------------------------")
 
     await reset(dut)
-    await load_coeff(dut, coeffs)
+    await load_coeff(dut, coeffs, sclk)
 
     for idx, s in enumerate(samples):
         # input sample
-        await load_sample(dut, s)
+        out = await load_sample(dut, s, sclk)
         cocotb.log.info(f"sample {idx} = {s}")
 
-        out = await read_output(dut)
         output_done_cycles.append(global_cycles)
 
         cocotb.log.info(f"out = {out}")
         out = out / float(normalize)
         y_dut.append(out)
+
+    # nop frame to drain final output
+    nop_frame = await load_sample(dut, 0x0000, sclk)
+    nop_frame = nop_frame / float(normalize)
+    y_dut.append(nop_frame)
+
+    # trim initial sample output (don't care due to stale miso)
+    y_dut = y_dut[1:]
 
     plt.plot(ts, yraw, 'k-')
     plt.plot(ts, y_lfilter, 'r-')
@@ -346,14 +370,6 @@ async def test_non_symmetric_coeff(dut):
         expected = coeffs[idx]
 
         assert abs(out-expected) <= 10, f"{out} != {expected}, order incorrect"
-
-
-@cocotb.test()
-async def test_on_chip_test_mode(dut):
-    clk = Clock(dut.clk, clock_period, "ns")
-    cocotb.start_soon(clk.start())
-
-    await reset(dut)
 
 # @cocotb.test()
 # async def test_reset_mid_sequence(dut):

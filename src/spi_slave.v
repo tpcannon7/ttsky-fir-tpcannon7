@@ -15,7 +15,7 @@ module spi_slave (
     // internal transfer
     input wire [15:0] tx_data_in,
     output wire [15:0] rx_data_out,
-    output wire spi_done,
+    output wire spi_rx_valid,
     output wire curr_frame_mode
 );
 
@@ -40,7 +40,7 @@ module spi_slave (
       sclk_sync <= 3'b000;
       mosi_sync <= 3'b000;
       cs_n_sync <= 3'b111;
-      mode_sync <= 3'b000;
+      mode_sync <= 3'b111;
     end else begin
       sclk_sync[0] <= sclk;
       sclk_sync[1] <= sclk_sync[0];
@@ -63,7 +63,7 @@ module spi_slave (
   localparam [1:0] Idle = 2'b00, Busy = 2'b01, Done = 2'b10;
   reg [1:0] curr_st, next_st;
 
-  assign spi_done = (curr_st == Done);
+  assign spi_rx_valid = (curr_st == Done);
   assign curr_frame_mode = curr_frame_mode_reg;
 
   always @(posedge clk or negedge rst_n) begin
@@ -83,22 +83,21 @@ module spi_slave (
         end
       end
       Busy: begin
-        if (bit_cnt == (SpiFrameWidth - 1)) begin
+        if (bit_cnt == (SpiFrameWidth)) begin
           next_st = Done;
         end
       end
       Done: begin
-        if (cs_n_rising) begin
-          next_st = Idle;
-        end
+        next_st = Idle;
       end
       default: next_st = curr_st;
     endcase
   end
 
-
   reg [SpiFrameWidth-1:0] rx_buf, tx_buf;
-  reg [$clog2(SpiFrameWidth)-1:0] bit_cnt;
+  // bit count needs to hold 1-16 since we increment on first sclk cycle from 
+  // 0-1 and miss the final bit if we count to 15 (only 14 bits with counter 1-15)
+  reg [$clog2(SpiFrameWidth):0] bit_cnt;
   reg curr_frame_mode_reg;
 
   assign miso = (~cs_n) ? tx_buf[SpiFrameWidth-1] : 1'bz;
@@ -119,7 +118,7 @@ module spi_slave (
       bit_cnt <= 0;
     end else if (curr_st == Busy && sclk_rising) begin
       bit_cnt <= bit_cnt + 1'b1;
-    end else if (bit_cnt == (SpiFrameWidth - 1)) begin
+    end else if (bit_cnt == (SpiFrameWidth)) begin
       bit_cnt <= 0;
     end
   end

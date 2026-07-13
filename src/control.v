@@ -6,7 +6,7 @@ module control (
 
     input wire [15:0] spi_rx_data,
     output wire [15:0] spi_tx_data,
-    input wire spi_done,
+    input wire spi_rx_valid,
     input wire spi_curr_frame_mode,
 
     input wire [15:0] dout_fir,
@@ -39,7 +39,7 @@ module control (
     next_st = curr_st;
     case (curr_st)
       Idle: begin
-        if (spi_done) begin
+        if (spi_rx_valid) begin
           next_st = SpiRx;
         end
       end
