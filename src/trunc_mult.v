@@ -4,8 +4,8 @@
 // added shitty 2's complement fix for negative numbers (we're changing this)
 
 module trunc_mult #(
-    parameter DataWidth = 16,
-    parameter DropBits  = 15   // this is our dropped LSP bits
+    parameter DataWidth = 12,
+    parameter DropBits  = 11   // this is our dropped LSP bits
 ) (
     input wire signed [DataWidth-1:0] a,
     input wire signed [DataWidth-1:0] b,
@@ -99,8 +99,8 @@ module trunc_mult #(
   always @(*) begin
     edge_ic   = 0;
     middle_ic = 0;
-    for (bit_idx = 1; bit_idx <= DataWidth - H; bit_idx++) begin
-      if (bit_idx == 1 || bit_idx == 2 || bit_idx == DataWidth - H - 1 || bit_idx == DataWidth - H) begin
+    for (bit_idx = 0; bit_idx <= DataWidth - H; bit_idx++) begin
+      if (bit_idx == 0 || bit_idx == 1 || bit_idx == DataWidth - H - 2 || bit_idx == DataWidth - H - 1) begin
         edge_ic = edge_ic + ic_column[bit_idx];
       end else begin
         middle_ic = middle_ic + ic_column[bit_idx];

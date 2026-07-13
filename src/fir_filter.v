@@ -5,18 +5,18 @@ module fir_filter #(
 ) (
     input wire clk,
     input wire rst_n,
-    input wire signed [15:0] din,
+    input wire signed [11:0] din,
     input wire mode,
     input wire in_valid,
     input wire out_ready,
 
-    output wire signed [15:0] dout,
+    output wire signed [11:0] dout,
     output wire out_valid,
     output wire in_ready
 );
 
-  localparam SampleWidth = 16;
-  localparam CoeffWidth = 16;
+  localparam SampleWidth = 12;
+  localparam CoeffWidth = 12;
   // AccWidth depends on output width from trunc_mult 
   localparam AccWidth = ((SampleWidth + CoeffWidth) - (CoeffWidth - 1)) + $clog2(Taps);
 
@@ -30,7 +30,7 @@ module fir_filter #(
   wire mac_cnt_full;
   assign mac_cnt_full = {1'b0, mac_idx} == Taps[$clog2(Taps):0] - 1'b1;
 
-  assign dout = acc[15:0];
+  assign dout = acc[11:0];
 
   localparam [2:0] Idle = 3'b000, Ready = 3'b010, Compute = 3'b011, Done = 3'b100;
   reg [2:0] curr_st, next_st;
@@ -128,7 +128,7 @@ module fir_filter #(
     end
   end
 
-  wire signed [16:0] trunc_out;
+  wire signed [12:0] trunc_out;
   trunc_mult #(
       .DataWidth(SampleWidth),
       .DropBits (CoeffWidth - 1)

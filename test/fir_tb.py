@@ -25,8 +25,8 @@ spi_frame_len = 16
 
 # params
 taps = 16
-coeff_width = 16
-sample_width = 16
+coeff_width = 12
+sample_width = 12
 
 # max/min values for bit widths
 min_val = -(2**(coeff_width-1))
@@ -68,7 +68,7 @@ async def reset(dut):
     await RisingEdge(dut.clk)
 
 async def spi_transact(dut, data_in, sclk):
-    data_in = data_in & 0xFFFF
+    data_in = (data_in & 0x0FFF) << 4 # double check
     rx_data = 0x0000
     dut.spi_cs_n.value = 0
     dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 0x0001
@@ -84,14 +84,14 @@ async def spi_transact(dut, data_in, sclk):
         data_in = (data_in << 1) & 0xFFFF
         dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 0x0001
     
-
     sclk.stop()
     dut.spi_cs_n.value = 1
     await ClockCycles(dut.clk, 25)
 
-    rx_data &= 0xFFFF
-    if rx_data & 0x8000:
-        rx_data -= 0x10000
+    rx_data = (rx_data >> 4) & 0x0FFF
+
+    if rx_data & 0x0800:
+        rx_data -= 0x1000
     return rx_data
 
 async def load_coeff(dut, coeffs, sclk):
@@ -237,11 +237,11 @@ async def test_noisy_sine(dut):
     for idx, s in enumerate(samples):
         # input sample
         out = await load_sample(dut, s, sclk)
-        cocotb.log.info(f"sample {idx} = {s}")
+        # cocotb.log.info(f"sample {idx} = {s}")
 
         output_done_cycles.append(global_cycles)
 
-        cocotb.log.info(f"out = {out}")
+        # cocotb.log.info(f"out = {out}")
         out = out / float(normalize)
         y_dut.append(out)
 

@@ -13,8 +13,8 @@ module spi_slave (
     input wire mode,
 
     // internal transfer
-    input wire [15:0] tx_data_in,
-    output wire [15:0] rx_data_out,
+    input wire [11:0] tx_data_in,
+    output wire [11:0] rx_data_out,
     output wire spi_rx_valid,
     output wire curr_frame_mode
 );
@@ -108,7 +108,7 @@ module spi_slave (
   reg curr_frame_mode_reg;
 
   assign miso = (~cs_n) ? tx_buf[SpiFrameWidth-1] : 1'bz;
-  assign rx_data_out = rx_buf;
+  assign rx_data_out = rx_buf[15:4];
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
@@ -136,7 +136,7 @@ module spi_slave (
     end else if (curr_st == Busy && sclk_falling) begin
       tx_buf <= {tx_buf[SpiFrameWidth-2:0], 1'b0};
     end else if (cs_n_falling) begin
-      tx_buf <= tx_data_in;
+      tx_buf <= {tx_data_in, 4'b0000};  // perhaps sign extend or it doenst matter idk
     end
   end
 

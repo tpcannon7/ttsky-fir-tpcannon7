@@ -4,13 +4,13 @@ module control (
     input wire clk,
     input wire rst_n,
 
-    input wire [15:0] spi_rx_data,
-    output wire [15:0] spi_tx_data,
+    input wire [11:0] spi_rx_data,
+    output wire [11:0] spi_tx_data,
     input wire spi_rx_valid,
     input wire spi_curr_frame_mode,
 
-    input wire [15:0] dout_fir,
-    output wire [15:0] din_fir,
+    input wire [11:0] dout_fir,
+    output wire [11:0] din_fir,
     input wire fir_out_valid,
     output wire control_out_ready,
     input wire fir_in_ready,
@@ -25,7 +25,7 @@ module control (
   assign fir_control_in_handshake  = control_in_valid && fir_in_ready;
   assign fir_control_out_handshake = control_out_ready && fir_out_valid;
 
-  reg [15:0] filter_out_buf, spi_in_buf;
+  reg [11:0] filter_out_buf, spi_in_buf;
   reg curr_frame_mode;
   reg rx_valid_reg;
 
