@@ -26,7 +26,7 @@ module tt_um_tpcannon7_fir (
   wire control_in_valid, control_out_ready;
 
   fir_filter #(
-      .Taps(28)
+      .Taps(30)
   ) fir (
       .clk(clk),
       .rst_n(rst_n),
