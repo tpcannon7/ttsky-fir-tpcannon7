@@ -20,9 +20,10 @@ module tt_um_tpcannon7_fir (
   assign uio_out[7:3] = 0;
   assign uio_out[1:0] = 0;
   assign uio_oe = 8'b00000100;
+  assign uo_out = 8'b00000000;
 
   wire fir_in_ready, fir_out_valid;
-  wire control_filter_mode, control_in_valid, control_byte_sel, control_out_ready;
+  wire control_in_valid, control_out_ready;
 
   fir_filter #(
       .Taps(16)
@@ -74,6 +75,6 @@ module tt_um_tpcannon7_fir (
   );
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{uio_in[7:4], uio_in[2], ena, 1'b0};
+  wire _unused = &{uio_in[7:4], uio_in[2], ui_in[7:1], ena, 1'b0};
 
 endmodule

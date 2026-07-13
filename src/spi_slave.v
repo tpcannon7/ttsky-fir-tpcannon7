@@ -21,7 +21,10 @@ module spi_slave (
 
   localparam SpiFrameWidth = 16;
 
-  wire sclk_rising, cs_n_rising;
+  wire sclk_rising;
+  /* verilator lint_off UNUSEDSIGNAL */
+  wire cs_n_rising;
+  /* verilator lint_on UNUSEDSIGNAL */
   wire sclk_falling, cs_n_falling;
 
   assign sclk_rising  = (sclk_sync[1] == 1'b1) && (sclk_sync[2] == 1'b0);
@@ -33,7 +36,11 @@ module spi_slave (
   // new "mode" pin will function as: LOW == coeff frame, HIGH == sample frame
   // we will idle the mode pin at high (default samples), coeff loading is pulling low as
   // a special case
-  reg [2:0] sclk_sync, mosi_sync, cs_n_sync, mode_sync;
+
+  reg [2:0] sclk_sync, cs_n_sync, mode_sync;
+  /* verilator lint_off UNUSEDSIGNAL */
+  reg [2:0] mosi_sync;
+  /* verilator lint_on UNUSEDSIGNAL */
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
