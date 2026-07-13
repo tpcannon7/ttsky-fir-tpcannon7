@@ -19,9 +19,10 @@ import math
 # i added a basic control layer that should work on the fir filter? double check that too!
 
 # clock perod (ns)
-clock_period = 40
-spi_clock = 1000
+clock_period = 35
+spi_clock_period = 200
 spi_frame_len = 16
+nop_frames = 2
 
 # params
 taps = 30
@@ -35,8 +36,9 @@ normalize = ((2**(coeff_width-1)))
 
 # Hz
 fc = 10000
-# 21 cycles for 16 taps, 13 for 8 taps (taps + 5 = comp time + byte handling)
-fs = (1 / (clock_period * 1e-9)) / (taps + 5) 
+# extra spi clock period term to account for cs_n high between frames
+total_spi_frame_time = (spi_clock_period * spi_frame_len) + spi_clock_period
+fs = (1 / (total_spi_frame_time * 1e-9))
 
 global_cycles = 0
 output_done_cycles = []
@@ -67,52 +69,68 @@ async def reset(dut):
 
     await RisingEdge(dut.clk)
 
-async def spi_transact(dut, data_in, sclk):
-    data_in = (data_in & 0x0FFF) << 4 # double check
-    rx_data = 0x0000
-    dut.spi_cs_n.value = 0
-    dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 0x0001
-    await RisingEdge(dut.clk)
-    cocotb.start_soon(sclk.start(start_high=False))
-    for i in range(spi_frame_len):
-        await RisingEdge(dut.spi_clock)
-        out = int(dut.spi_miso.value)
-        rx_data = (rx_data << 1) | out
+class SPIinterface:
+    def __init__(self, spi_clock_period, dut):
+        self.dut = dut
+        self.spi_clock_period = spi_clock_period
 
-        # shift mosi on falling edge
-        await FallingEdge(dut.spi_clock)
-        data_in = (data_in << 1) & 0xFFFF
-        dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 0x0001
-    
-    sclk.stop()
-    dut.spi_cs_n.value = 1
-    await ClockCycles(dut.clk, 25)
+        self.sclk = Clock(self.dut.spi_clock, self.spi_clock_period, "ns")
 
-    rx_data = (rx_data >> 4) & 0x0FFF
+    async def transmit(self, data_in):
+        data_in = (data_in & 0x0FFF) << 4 # double check
+        rx_data = 0x0000
+        self.dut.spi_cs_n.value = 0
+        self.dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 0x0001
+        await RisingEdge(self.dut.clk)
+        cocotb.start_soon(self.sclk.start(start_high=False))
+        for i in range(spi_frame_len):
+            await RisingEdge(self.dut.spi_clock)
+            out = int(self.dut.spi_miso.value)
+            rx_data = (rx_data << 1) | out
 
-    if rx_data & 0x0800:
-        rx_data -= 0x1000
-    return rx_data
+            # shift mosi on falling edge
+            await FallingEdge(self.dut.spi_clock)
+            data_in = (data_in << 1) & 0xFFFF
+            self.dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 0x0001
+        
+        self.sclk.stop()
+        self.dut.spi_cs_n.value = 1
+        await Timer(self.spi_clock_period, "ns")
 
-async def load_coeff(dut, coeffs, sclk):
-    # can also reduce # of sync flops? think about it
-    dut.fir_mode.value = 0
-    await RisingEdge(dut.clk)
-    for coeff in coeffs[::-1]:
-        rx = await spi_transact(dut, coeff, sclk)
+        rx_data = (rx_data >> 4) & 0x0FFF
 
-    dut.fir_mode.value = 1
+        if rx_data & 0x0800:
+            rx_data -= 0x1000
+        return rx_data
 
-async def load_sample(dut, sample, sclk):
-    dut.fir_mode.value = 1
-    rx = await spi_transact(dut,sample,sclk)
-    return rx
+    async def load_coeff(self, coeffs):
+        self.dut.fir_mode.value = 0
+        await RisingEdge(self.dut.clk)
+        # load in backwards due to coeff shift line
+        for coeff in coeffs[::-1]:
+            rx = await self.transmit(coeff)
+
+        self.dut.fir_mode.value = 1
+
+    async def load_samples(self, samples):
+        rx = []
+        self.dut.fir_mode.value = 1
+        for idx, s in enumerate(samples):
+            res = await self.transmit(s)
+            await RisingEdge(self.dut.clk)
+            rx.append(res)
+
+        for _ in range(nop_frames):
+            nop = await self.transmit(0x0000)
+            rx.append(nop)
+
+        return rx
 
 @cocotb.test()
 async def test_impulse_response(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
-    sclk = Clock(dut.spi_clock, spi_clock, "ns")
+    spi = SPIinterface(spi_clock_period, dut)
 
     h = firwin(taps, fc, fs=fs)
     cocotb.log.info(f"float coeffs = {h}")
@@ -128,36 +146,25 @@ async def test_impulse_response(dut):
     cocotb.log.info("----------------------------------")
 
     await reset(dut)
-    await load_coeff(dut, coeffs, sclk)
+    await spi.load_coeff(coeffs)
 
-    outputs = []
-
-    for idx, s in enumerate(samples):
-        # assert in_valid, load sample in
-        res = await load_sample(dut, s, sclk)
-        await RisingEdge(dut.clk)
-        cocotb.log.info(f"sample {idx} = {s}")
-        outputs.append(res)
-
-    
-
-    nop_res = await load_sample(dut, 0x0000, sclk)
-    outputs.append(nop_res)
+    # increasing spi clock leads to latency during FIR compute
+    # 2 frame latency between input samples and output res on SPI MISO
+    # samples N's result is available on sample N+2's tranmission
+    outputs = await spi.load_samples(samples)
     cocotb.log.info(f"outputs (no trim) = {outputs}")
-    # trim first garbage frame
-    outputs = outputs[1:]
-    cocotb.log.info(f"outputs (trim leading garbage frame) = {outputs}")
+    # trim garbage frames
+    outputs = outputs[nop_frames:]
+    cocotb.log.info(f"outputs (trim leading garbage frames) = {outputs}")
 
     for idx, out in enumerate(outputs):
         assert abs(out - coeffs[idx]) <= 5, f"{out} does not match in acceptable range to {coeffs[idx]}"
-
-
 
 @cocotb.test()
 async def test_step_response(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
-    sclk = Clock(dut.spi_clock, spi_clock, "ns")
+    spi = SPIinterface(spi_clock_period, dut)
 
     # generate coeffs
     h = firwin(taps, fc, fs=fs)
@@ -176,29 +183,22 @@ async def test_step_response(dut):
     cocotb.log.info("----------------------------------")
 
     await reset(dut)
-    await load_coeff(dut, coeffs,sclk)
+    await spi.load_coeff(coeffs)
 
-    out = 0
-
-    for idx, s in enumerate(samples):
-        # load sample in
-        out = await load_sample(dut, s,sclk)
-        cocotb.log.info(f"sample {idx} = {s}")
-
-    nop_frame = await load_sample(dut, s, sclk)
-    out = nop_frame
+    out = await spi.load_samples(samples)
+    out = out[nop_frames:]
 
     expected = sum(coeffs)
     cocotb.log.info(f"out = {out}")
     cocotb.log.info(f"exp = {expected}")
 
-    assert abs(out - expected) <= 20, f"{out} does not match within error to {expected}"
+    assert abs(out[-1] - expected) <= 20, f"{out} does not match within error to {expected}"
     
 @cocotb.test()
 async def test_noisy_sine(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
-    sclk = Clock(dut.spi_clock, spi_clock, "ns")
+    spi = SPIinterface(spi_clock_period, dut)
 
     cocotb.start_soon(cycle_counter(dut))
 
@@ -211,11 +211,12 @@ async def test_noisy_sine(dut):
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
     cocotb.log.info(f"fixed coeffs = {coeffs}")
 
-    # sine wave + noise (1 KHz)
-    duration = 0.001
+    # sine wave + noise (2 KHz)
+    freq = 2000
+    duration = 0.01
     n_samples = int(fs * duration)
     ts = np.linspace(0,duration,n_samples, endpoint=False)
-    ys = np.sin(2*np.pi * 1000.0 * ts)
+    ys = np.sin(2*np.pi * freq * ts)
     yerr = 0.5 * np.random.normal(size=len(ts))
     yraw = ys + yerr
 
@@ -232,26 +233,13 @@ async def test_noisy_sine(dut):
     cocotb.log.info("----------------------------------")
 
     await reset(dut)
-    await load_coeff(dut, coeffs, sclk)
+    await spi.load_coeff(coeffs)
 
-    for idx, s in enumerate(samples):
-        # input sample
-        out = await load_sample(dut, s, sclk)
-        # cocotb.log.info(f"sample {idx} = {s}")
+    y_dut = await spi.load_samples(samples)
+    y_dut = [v / float(normalize) for v in y_dut]
 
-        output_done_cycles.append(global_cycles)
-
-        # cocotb.log.info(f"out = {out}")
-        out = out / float(normalize)
-        y_dut.append(out)
-
-    # nop frame to drain final output
-    nop_frame = await load_sample(dut, 0x0000, sclk)
-    nop_frame = nop_frame / float(normalize)
-    y_dut.append(nop_frame)
-
-    # trim initial sample output (don't care due to stale miso)
-    y_dut = y_dut[1:]
+    # trim initial garbage spi frames (stale miso/filter not ready)
+    y_dut = y_dut[nop_frames:]
 
     plt.plot(ts, yraw, 'k-')
     plt.plot(ts, y_lfilter, 'r-')
@@ -274,7 +262,7 @@ async def test_noisy_sine(dut):
 async def test_switching_inputs(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
-    sclk = Clock(dut.spi_clock, spi_clock, "ns")
+    spi = SPIinterface(spi_clock_period, dut)
 
     # generate coeffs
     h = firwin(taps, fc, fs=fs)
@@ -293,19 +281,11 @@ async def test_switching_inputs(dut):
     cocotb.log.info("----------------------------------")
 
     await reset(dut)
-    await load_coeff(dut, coeffs, sclk)
+    await spi.load_coeff(coeffs)
 
-    outputs = []
+    outputs = await spi.load_samples(samples)
 
-    for idx, s in enumerate(samples):
-        out = await load_sample(dut, s, sclk)
-        cocotb.log.info(f"sample {idx} = {s}")
-
-        outputs.append(out)
-
-    nop_frame = await load_sample(dut, 0x0000, sclk)
-    outputs.append(nop_frame)
-    outputs = outputs[1:]
+    outputs = outputs[nop_frames:]
 
     cocotb.log.info(f"outputs = {outputs}")
 
@@ -313,7 +293,6 @@ async def test_switching_inputs(dut):
     cocotb.log.info(f"output diffs = {output_diff}")
 
     assert (np.all(output_diff[taps:] == 0)), f"output diff unexpected nonzero during switching"
-
 
 # this isnt a real test but more to verify the plots match closely
 @cocotb.test()
@@ -348,7 +327,7 @@ async def test_frequency_response(dut):
     plt.axvline(fc, color='black', linestyle=':', linewidth=0.8)
     plt.ylabel("Amplitude (dB)")
     plt.xlabel("Frequency (Hz)")
-    plt.legend(["dut freq resp", "true freq response"])
+    plt.legend(["dut freq resp","true freq response","cutoff freq" ])
     plt.savefig('freq_response.png')
 
 
@@ -357,7 +336,7 @@ async def test_frequency_response(dut):
 async def test_non_symmetric_coeff(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
-    sclk = Clock(dut.spi_clock, spi_clock, "ns")
+    spi = SPIinterface(spi_clock_period, dut)
 
     coeffs = [(i+1) / taps for i in range(taps)]
     cocotb.log.info(f"coeffs = {coeffs}")
@@ -369,36 +348,22 @@ async def test_non_symmetric_coeff(dut):
     samples = [(2**(sample_width-1))-1] + ([0] * (taps - 1))
 
     await reset(dut)
-    await load_coeff(dut, coeffs, sclk)
+    await spi.load_coeff(coeffs)
 
-    outputs = []
+    outputs = await spi.load_samples(samples)
 
-    for idx, s in enumerate(samples):
-        out = await load_sample(dut, s, sclk)
-        cocotb.log.info(f"sample {idx} = {s}")
-        outputs.append(out)
-
-        expected = coeffs[idx]
-
-    nop_frame = await load_sample(dut, 0x0000, sclk)
-    outputs.append(nop_frame)
-    outputs = outputs[1:]
+    outputs = outputs[nop_frames:]
 
     cocotb.log.info(f"outputs = {outputs}")
     cocotb.log.info(f"expected = {coeffs}")
 
     for idx, out in enumerate(outputs):
-        assert abs(out- coeffs[idx]) <= 10, f"{out} != {coeff[idx]}, order incorrect"
+        assert abs(out- coeffs[idx]) <= 10, f"{out} != {coeffs[idx]}, order incorrect"
 
-# @cocotb.test()
-# async def test_reset_mid_sequence(dut):
-#     pass
+@cocotb.test()
+async def test_reset_mid_sequence(dut):
+    pass
 
-# @cocotb.test()
-# async def test_load_mid_sequence(dut):
-#     pass
-
-
-# @cocotb.test()
-# async def test_full_handshake_no_helpers(dut):
-#     pass
+@cocotb.test()
+async def test_load_mid_sequence(dut):
+    pass
