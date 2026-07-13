@@ -24,7 +24,7 @@ spi_clock = 1000
 spi_frame_len = 16
 
 # params
-taps = 32
+taps = 24
 coeff_width = 12
 sample_width = 12
 
@@ -338,10 +338,13 @@ async def test_frequency_response(dut):
     cocotb.log.info("----------------------------------")
     cocotb.log.info("         FREQUENCY RESPONSE       ")
     cocotb.log.info("----------------------------------")
+    
+    mag_dut = 20 * np.log10(np.maximum(abs(h_dut), 1e-6))
+    mag_true = 20 * np.log10(np.maximum(abs(h_true), 1e-6))
 
     plt.title("Frequency Response of DUT vs. Python Model")
-    plt.plot(w_dut, 20*np.log10(abs(h_dut)), 'r-')
-    plt.plot(w_true, 20*np.log10(abs(h_true)), 'c-' )
+    plt.plot(w_dut, mag_dut, 'r-')
+    plt.plot(w_true, mag_true, 'c-' )
     plt.axvline(fc, color='black', linestyle=':', linewidth=0.8)
     plt.ylabel("Amplitude (dB)")
     plt.xlabel("Frequency (Hz)")
