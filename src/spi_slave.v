@@ -136,7 +136,7 @@ module spi_slave (
     end else if (curr_st == Busy && sclk_falling) begin
       tx_buf <= {tx_buf[SpiFrameWidth-2:0], 1'b0};
     end else if (cs_n_falling) begin
-      tx_buf <= {tx_data_in, 4'b0000};  // perhaps sign extend or it doenst matter idk
+      tx_buf <= {tx_data_in, 4'b0000};  // pad to fit 16 bit frame
     end
   end
 

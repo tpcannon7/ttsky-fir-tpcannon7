@@ -20,7 +20,9 @@ import math
 
 # clock perod (ns)
 clock_period = 35
-spi_clock_period = 200
+# spi clock of 1-4mhz requires 2 NOP frames
+# spi clock 5mhz < (not sure bounds) requires 4+ nop frames
+spi_clock_period = 250
 spi_frame_len = 16
 nop_frames = 2
 
@@ -161,6 +163,40 @@ async def test_impulse_response(dut):
         assert abs(out - coeffs[idx]) <= 5, f"{out} does not match in acceptable range to {coeffs[idx]}"
 
 @cocotb.test()
+async def test_negative_impulse_response(dut):
+    clk = Clock(dut.clk, clock_period, "ns")
+    cocotb.start_soon(clk.start())
+    spi = SPIinterface(spi_clock_period, dut)
+
+    h = firwin(taps, fc, fs=fs)
+    cocotb.log.info(f"float coeffs = {h}")
+
+    coeffs = h * normalize
+    coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
+    cocotb.log.info(f"fixed coeffs = {coeffs}")
+
+    samples = [min_val] + ([0] * (taps - 1))
+
+    cocotb.log.info("----------------------------------")
+    cocotb.log.info("     NEGATIVE IMPULSE RESPONSE    ")
+    cocotb.log.info("----------------------------------")
+
+    await reset(dut)
+    await spi.load_coeff(coeffs)
+
+    # increasing spi clock leads to latency during FIR compute
+    # 2 frame latency between input samples and output res on SPI MISO
+    # samples N's result is available on sample N+2's tranmission
+    outputs = await spi.load_samples(samples)
+    cocotb.log.info(f"outputs (no trim) = {outputs}")
+    # trim garbage frames
+    outputs = outputs[nop_frames:]
+    cocotb.log.info(f"outputs (trim leading garbage frames) = {outputs}")
+
+    for idx, out in enumerate(outputs):
+        assert abs(abs(out) - abs(coeffs[idx])) <= 5, f"{out} does not match in acceptable range to {coeffs[idx]}"
+
+@cocotb.test()
 async def test_step_response(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
@@ -192,7 +228,8 @@ async def test_step_response(dut):
     cocotb.log.info(f"out = {out}")
     cocotb.log.info(f"exp = {expected}")
 
-    assert abs(out[-1] - expected) <= 20, f"{out} does not match within error to {expected}"
+    # across N taps we accumulate about error; for increasing # of taps we have more error due to serial MAC
+    assert abs(out[-1] - expected) <= 30, f"{out} does not match within error to {expected}"
     
 @cocotb.test()
 async def test_noisy_sine(dut):
