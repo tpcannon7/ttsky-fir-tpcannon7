@@ -27,7 +27,7 @@ spi_frame_len = 16
 nop_frames = 2
 
 # params
-taps = 30
+taps = 28
 coeff_width = 12
 sample_width = 12
 
@@ -242,7 +242,7 @@ async def test_noisy_sine(dut):
 
     # sine wave + noise (2 KHz)
     freq = 2000
-    duration = 0.01
+    duration = 0.001
     n_samples = int(fs * duration)
     ts = np.linspace(0,duration,n_samples, endpoint=False)
     ys = np.sin(2*np.pi * freq * ts)
@@ -349,12 +349,12 @@ async def test_frequency_response(dut):
     mag_true = 20 * np.log10(np.maximum(abs(h_true), 1e-6))
 
     plt.title("Frequency Response of DUT vs. Python Model")
-    plt.plot(w_dut, mag_dut, 'r-')
-    plt.plot(w_true, mag_true, 'c-' )
-    plt.axvline(fc, color='black', linestyle=':', linewidth=0.8)
+    plt.plot(w_dut, mag_dut, 'r-', label="dut frequency response")
+    plt.plot(w_true, mag_true, 'c-', label="python model frequency response" )
+    plt.axvline(fc, color='black', linestyle=':', linewidth=0.8, label="fc")
     plt.ylabel("Amplitude (dB)")
     plt.xlabel("Frequency (Hz)")
-    plt.legend(["dut freq resp","true freq response","cutoff freq" ])
+    plt.legend()
     plt.savefig('freq_response.png')
 
 
