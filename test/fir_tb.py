@@ -135,8 +135,6 @@ async def test_impulse_response(dut):
     spi = SPIinterface(spi_clock_period, dut)
 
     h = firwin(taps, fc, fs=fs)
-    cocotb.log.info(f"float coeffs = {h}")
-
     coeffs = h * normalize
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
     cocotb.log.info(f"fixed coeffs = {coeffs}")
@@ -169,8 +167,6 @@ async def test_negative_impulse_response(dut):
     spi = SPIinterface(spi_clock_period, dut)
 
     h = firwin(taps, fc, fs=fs)
-    cocotb.log.info(f"float coeffs = {h}")
-
     coeffs = h * normalize
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
     cocotb.log.info(f"fixed coeffs = {coeffs}")
@@ -204,8 +200,6 @@ async def test_step_response(dut):
 
     # generate coeffs
     h = firwin(taps, fc, fs=fs)
-    cocotb.log.info(f"float coeffs = {h}")
-    
     # fixed point
     coeffs = h * normalize
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
@@ -241,8 +235,6 @@ async def test_noisy_sine(dut):
 
     # generate coeffs
     h = firwin(taps, fc, fs=fs)
-    cocotb.log.info(f"float coeffs = {h}")
-    
     # fixed point
     coeffs = h * normalize
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
@@ -341,8 +333,6 @@ async def test_frequency_response(dut):
 
     # generate coeffs
     h = firwin(taps, fc, fs=fs)
-    cocotb.log.info(f"float coeffs = {h}")
-    
     # fixed point
     coeffs = h * normalize
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
@@ -376,8 +366,6 @@ async def test_non_symmetric_coeff(dut):
     spi = SPIinterface(spi_clock_period, dut)
 
     coeffs = [(i+1) / taps for i in range(taps)]
-    cocotb.log.info(f"coeffs = {coeffs}")
-
     coeffs = [c * normalize for c in coeffs]
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
     cocotb.log.info(f"fixed coeffs = {coeffs}")

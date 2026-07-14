@@ -91,11 +91,14 @@ module trunc_mult #(
     end
   end
 
-  // edge ic values are 4 total values (4 bits summed together max at 1 == 4 which needs 2 bits)
-  // middle ic values are 11 bit values max value of 11, needs 5 bits to hold max possible
+  // edge ic values are 4 total values (4 bits summed together 1+1+1+1 = 4 which needs 3 bits)
+  // edge ic is: i = 1,2,n-h-1, n-h
+  // middle ic: 2 < i < n - h - 1
+  // subtract all by 1 to use base 0 indexing
+  // middle ic values are 11 bit values max value of 11 (1+1+1+1...+1=11), needs 4 bits to hold max possible
   // "Low error Truncated Multipliers for DSP applications" Garafolo et al.
   reg [2:0] edge_ic;
-  reg [4:0] middle_ic;
+  reg [3:0] middle_ic;
   always @(*) begin
     edge_ic   = 0;
     middle_ic = 0;

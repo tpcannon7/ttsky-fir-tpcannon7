@@ -17,8 +17,11 @@ module fir_filter #(
 
   localparam SampleWidth = 12;
   localparam CoeffWidth = 12;
+  localparam DropBits = 8;
+  localparam TruncOutWidth = (SampleWidth * 2) - DropBits;
+  localparam CoeffFracBits = CoeffWidth - 1;
   // AccWidth depends on output width from trunc_mult 
-  localparam AccWidth = ((SampleWidth + CoeffWidth) - (CoeffWidth - 1)) + $clog2(Taps);
+  localparam AccWidth = ((SampleWidth + CoeffWidth) - DropBits) + $clog2(Taps);
 
   assign out_valid = (curr_st == Done);
   assign in_ready  = (curr_st == Ready);
@@ -30,7 +33,7 @@ module fir_filter #(
   wire mac_cnt_full;
   assign mac_cnt_full = {1'b0, mac_idx} == Taps[$clog2(Taps):0] - 1'b1;
 
-  assign dout = acc[11:0];
+  assign dout = acc[CoeffFracBits-DropBits+:12];
 
   localparam [2:0] Idle = 3'b000, Ready = 3'b010, Compute = 3'b011, Done = 3'b100;
   reg [2:0] curr_st, next_st;
@@ -124,14 +127,14 @@ module fir_filter #(
     end else if (curr_st != Compute && curr_st != Done) begin
       acc <= 0;
     end else if (curr_st == Compute) begin
-      acc <= acc + {3'b111, trunc_out};
+      acc <= acc + trunc_out;
     end
   end
 
-  wire signed [12:0] trunc_out;
+  wire signed [TruncOutWidth-1:0] trunc_out;
   trunc_mult #(
       .DataWidth(SampleWidth),
-      .DropBits (CoeffWidth - 1)
+      .DropBits (DropBits)
   ) mult (
       .a  (samples[mac_idx]),
       .b  (coeff[mac_idx]),
