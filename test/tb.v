@@ -19,7 +19,7 @@ module tb ();
 
   reg spi_clock, spi_cs_n, spi_mosi, fir_mode;
   wire spi_miso;
-  reg [6:0] ui_in_extra = 0;
+  reg [6:0] ui_in_extra = {7{1'b0}};
 
   reg [7:0] ui_in;
   reg [7:0] uio_in;
@@ -27,9 +27,15 @@ module tb ();
   wire [7:0] uio_out;
   wire [7:0] uio_oe;
 
-  assign ui_in = {ui_in_extra, fir_mode};
+  assign ui_in[0] = fir_mode;
+  assign ui_in[7:1] = ui_in_extra;
+
   assign spi_miso = uio_out[2];
-  assign uio_in = {4'h0, spi_clock, 1'b0, spi_mosi, spi_cs_n};
+  assign uio_in[0] = spi_cs_n;
+  assign uio_in[1] = spi_mosi;
+  assign uio_in[2] = 1'b0;
+  assign uio_in[3] = spi_clock;
+  assign uio_in[7:4] = {4{1'b0}};
 
 `ifdef GL_TEST
   wire VPWR = 1'b1;

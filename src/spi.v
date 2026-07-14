@@ -1,6 +1,6 @@
 `default_nettype none
 
-module spi_slave (
+module spi (
     input wire clk,
     input wire rst_n,
 
@@ -92,6 +92,8 @@ module spi_slave (
       Busy: begin
         if (bit_cnt == (SpiFrameWidth)) begin
           next_st = Done;
+        end else if (cs_n_rising) begin
+          next_st = Idle;  // erroneous cs_n HIGH during transcation
         end
       end
       Done: begin
@@ -126,6 +128,8 @@ module spi_slave (
     end else if (curr_st == Busy && sclk_rising) begin
       bit_cnt <= bit_cnt + 1'b1;
     end else if (bit_cnt == (SpiFrameWidth)) begin
+      bit_cnt <= 0;
+    end else if (curr_st == Idle) begin
       bit_cnt <= 0;
     end
   end

@@ -20,7 +20,7 @@ project:
     - "tt_um_tpcannon7_fir.v"
     - "fir_filter.v"
     - "trunc_mult.v"
-    - "spi_slave.v"
+    - "spi.v"
     - "control.v"
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.

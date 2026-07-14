@@ -19,10 +19,10 @@ import math
 # i added a basic control layer that should work on the fir filter? double check that too!
 
 # clock perod (ns)
-clock_period = 35
+clock_period = 40 # 25mhz
 # spi clock of 1-4mhz requires 2 NOP frames
 # spi clock 5mhz < (not sure bounds) requires 4+ nop frames
-spi_clock_period = 250
+spi_clock_period = 333 # ~3mhz
 spi_frame_len = 16
 nop_frames = 2
 
@@ -386,9 +386,9 @@ async def test_non_symmetric_coeff(dut):
         assert abs(out- coeffs[idx]) <= 10, f"{out} != {coeffs[idx]}, order incorrect"
 
 @cocotb.test()
-async def test_reset_mid_sequence(dut):
+async def test_cs_n_assert_mid_sequence(dut):
     pass
 
 @cocotb.test()
-async def test_load_mid_sequence(dut):
+async def test_load_coeffs_mid_sample_drive(dut):
     pass

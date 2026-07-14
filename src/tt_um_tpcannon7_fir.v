@@ -43,7 +43,7 @@ module tt_um_tpcannon7_fir (
   wire spi_curr_frame_mode, spi_rx_valid;
   wire control_curr_frame_mode;
 
-  spi_slave spi (
+  spi spi (
       .clk(clk),
       .rst_n(rst_n),
       .cs_n(uio_in[0]),
@@ -58,7 +58,7 @@ module tt_um_tpcannon7_fir (
   );
 
   wire [11:0] filter_in, filter_out;
-  control control_layer (
+  control control (
       .clk(clk),
       .rst_n(rst_n),
       .spi_rx_data(spi_rx_data),
