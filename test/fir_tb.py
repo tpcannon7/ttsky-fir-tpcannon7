@@ -28,16 +28,17 @@ nop_frames = 2
 
 # params
 taps = 28
-coeff_width = 12
-sample_width = 12
+data_width = 12
 
 # max/min values for bit widths
-min_val = -(2**(coeff_width-1))
-max_val = (2**(coeff_width-1)-1)
-normalize = ((2**(coeff_width-1)))
+min_val = -(2**(data_width-1))
+max_val = (2**(data_width-1)-1)
+normalize = ((2**(data_width-1)))
 
 # Hz
 fc = 10000
+fc1 = 2000
+fc2 = 5000
 # extra spi clock period term to account for cs_n high between frames
 total_spi_frame_time = (spi_clock_period * spi_frame_len) + spi_clock_period
 fs = (1 / (total_spi_frame_time * 1e-9))
@@ -206,7 +207,7 @@ async def test_step_response(dut):
     cocotb.log.info(f"fixed coeffs = {coeffs}")
 
     # step response
-    samples = [0] * taps + [(2**(sample_width-1))-1] * taps
+    samples = [0] * taps + [(2**(data_width-1))-1] * taps
 
     cocotb.log.info("----------------------------------")
     cocotb.log.info("           STEP RESPONSE          ")
@@ -357,7 +358,6 @@ async def test_frequency_response(dut):
     plt.legend()
     plt.savefig('freq_response.png')
 
-
 # test to verify new coeff shift reg works properly
 @cocotb.test()
 async def test_non_symmetric_coeff(dut):
@@ -370,7 +370,12 @@ async def test_non_symmetric_coeff(dut):
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
     cocotb.log.info(f"fixed coeffs = {coeffs}")
 
-    samples = [(2**(sample_width-1))-1] + ([0] * (taps - 1))
+    samples = [(2**(data_width-1))-1] + ([0] * (taps - 1))
+
+    
+    cocotb.log.info("----------------------------------")
+    cocotb.log.info("    NON-SYMMETRIC COEFFCIENTS     ")
+    cocotb.log.info("----------------------------------")
 
     await reset(dut)
     await spi.load_coeff(coeffs)
@@ -385,10 +390,187 @@ async def test_non_symmetric_coeff(dut):
     for idx, out in enumerate(outputs):
         assert abs(out- coeffs[idx]) <= 10, f"{out} != {coeffs[idx]}, order incorrect"
 
-@cocotb.test()
-async def test_cs_n_assert_mid_sequence(dut):
-    pass
 
 @cocotb.test()
 async def test_load_coeffs_mid_sample_drive(dut):
+    clk = Clock(dut.clk, clock_period, "ns")
+    cocotb.start_soon(clk.start())
+    sclk = Clock(dut.spi_clock, spi_clock_period, "ns")
+
+    # impulse
+    samples = [max_val] + [0] * (taps - 1)
+    cocotb.log.info(f"samples = {samples}")
+
+    h1 = firwin(taps,[fc1, fc2],pass_zero=False,fs=fs) # bandpass
+    h2 = firwin(taps,fc,fs=fs) # low pass
+
+    c1 = h1 * normalize
+    c1 =[max(min_val,min(max_val,int(round(c)))) for c in c1]
+    cocotb.log.info(f"c1 = {c1}")
+
+    c2 = h2 * normalize
+    c2 =[max(min_val,min(max_val,int(round(c)))) for c in c2]
+    cocotb.log.info(f"c2 = {c2}")
+
+    cocotb.log.info("----------------------------------")
+    cocotb.log.info("    MID-SAMPLE DRIVE COEFF RELOAD ")
+    cocotb.log.info("----------------------------------")
+
+    await reset(dut)
+
+    c1_outputs = []
+
+    async def nop():
+        outputs = []
+        for _ in range(nop_frames):
+            out = 0x0000
+            nop = 0x0000
+            dut.fir_mode.value = 1
+            dut.spi_cs_n.value = 0
+            await RisingEdge(dut.clk)
+            cocotb.start_soon(sclk.start(start_high=False))
+            dut.spi_mosi.value = (nop & 0x8000) >> spi_frame_len - 1
+            for _ in range(spi_frame_len):
+                await RisingEdge(dut.spi_clock)
+                miso = int(dut.spi_miso.value)
+                await FallingEdge(dut.spi_clock)
+                out = (out << 1) | miso
+                nop = nop << 1
+                dut.spi_mosi.value = (nop & 0x8000) >> spi_frame_len - 1
+            
+            sclk.stop()
+            dut.spi_cs_n.value = 1
+            await Timer(spi_clock_period, "ns")
+
+            out = out >> spi_frame_len - data_width
+
+            if out & 0x0800:
+                out -= 0x1000
+
+            outputs.append(out)
+        return outputs
+
+    # load c1 coeffcients
+    for idx, c in enumerate(c1):
+        out = 0x0000
+        c = (c & 0x0FFF) << spi_frame_len - data_width
+        dut.fir_mode.value = 0
+        dut.spi_cs_n.value = 0
+        await RisingEdge(dut.clk)
+        cocotb.start_soon(sclk.start(start_high=False))
+        dut.spi_mosi.value = (c & 0x8000) >> (spi_frame_len - 1)
+        for _ in range(spi_frame_len):
+            await RisingEdge(dut.spi_clock)
+            miso = int(dut.spi_miso.value)
+            await FallingEdge(dut.spi_clock)
+            c = (c << 1) & 0xFFFF
+            out = (out << 1) | miso
+            dut.spi_mosi.value = (c & 0x8000) >> (spi_frame_len - 1)
+
+        
+        sclk.stop()
+        dut.spi_cs_n.value = 1
+        await Timer(spi_clock_period, "ns")
+        out = out >> spi_frame_len - data_width
+
+        if out & 0x0800:
+            out -= 0x1000
+
+        c1_outputs.append(out)
+
+    c1_outputs.append(await nop())
+
+
+    pre_load_outputs = []
+    post_load_outputs = []
+    load_done = False
+
+    cutoff_idx = taps // 2
+
+    for idx, s in enumerate(samples):
+        if (idx == cutoff_idx):
+            for idx, c in enumerate(c2):
+                c2_out = 0x0000
+                c = (c & 0x0FFF) << spi_frame_len - data_width
+                dut.fir_mode.value = 0
+                dut.spi_cs_n.value = 0
+                await RisingEdge(dut.clk)
+                cocotb.start_soon(sclk.start(start_high=False))
+                dut.spi_mosi.value = (c & 0x8000) >> spi_frame_len - 1
+                for _ in range(spi_frame_len):
+                    await RisingEdge(dut.spi_clock)
+                    miso = int(dut.spi_miso.value)
+                    await FallingEdge(dut.spi_clock)
+                    c2_out = (c2_out << 1) | miso
+                    c = (c << 1) & 0xFFFF
+                    dut.spi_mosi.value = (c & 0x8000) >> spi_frame_len - 1
+
+                sclk.stop()
+                dut.spi_cs_n.value = 1
+                await Timer(spi_clock_period, "ns")
+
+                c2_out = c2_out >> spi_frame_len - data_width
+
+                if c2_out & 0x0800:
+                    c2_out -= 0x1000
+
+                pre_load_outputs.append(c2_out)
+            
+            load_done = True
+            nop_res = await nop()
+            for n in nop_res: pre_load_outputs.append(n)
+
+        s = (s & 0x0FFF) << spi_frame_len - data_width
+        out = 0x0000
+        dut.fir_mode.value = 1
+        dut.spi_cs_n.value = 0
+        await RisingEdge(dut.clk)
+        cocotb.start_soon(sclk.start(start_high=False))
+        dut.spi_mosi.value = (s & 0x8000) >> spi_frame_len - 1
+        for _ in range(spi_frame_len):
+            await RisingEdge(dut.spi_clock)
+            miso = int(dut.spi_miso.value)
+            await FallingEdge(dut.spi_clock)
+            out = (out << 1) | miso
+            s = (s << 1) & 0xFFFF
+            dut.spi_mosi.value = (s & 0x8000) >> spi_frame_len - 1
+
+        sclk.stop()
+        dut.spi_cs_n.value = 1
+        await Timer(spi_clock_period, "ns")
+
+        out = out >> spi_frame_len - data_width
+        if out & 0x0800:
+            out -= 0x1000
+
+        if load_done == True:
+            post_load_outputs.append(out)
+        else:
+            pre_load_outputs.append(out)
+
+    nop_res = await nop()
+    for n in nop_res: post_load_outputs.append(n)
+
+    cocotb.log.info(f"clipped c1 (taps/2 (top half)) = {c1[:(taps//2)]}")
+    cocotb.log.info(f"clipped c2 (taps / 2 (bottom half)) = {c2[(taps//2):]}")
+    
+    # we miss c1's coeff #tap/2 because the result is flushed from the control layer
+    # because of the previous load
+    # coeff loading causing state machine to go from ready -> done instead of ready -> compute -> done
+    # less cycles gives less time for previous result to be picked up by spi module; the quicker state machine 
+    # turnaround on the coeff load overwrites the previous result before spi can pick it up into its tx buffer
+
+    # cocotb.log.info(f"c1_outputs = {c1_outputs}")
+    cocotb.log.info(f"pre_load_outputs = {pre_load_outputs}")
+    cocotb.log.info(f"post_load_outputs = {post_load_outputs}")
+
+
+@cocotb.test()
+async def test_cs_n_assert_mid_sequence(dut):
+
+    # choose random sample # to pull cs_n high during 
+    # spi transcation
+    rng = np.random.default_rng()
+    rand_taps = rng.integers(0, high=taps, size=2)
+
     pass

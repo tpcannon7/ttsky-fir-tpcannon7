@@ -149,7 +149,7 @@ module spi (
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
       curr_frame_mode_reg <= 0;
-    end else if (bit_cnt == SpiFrameWidth) begin
+    end else if (bit_cnt == (SpiFrameWidth / 2)) begin  // capture mode in middle of frame
       curr_frame_mode_reg <= mode_sync[2];
     end else if (curr_st == Idle) begin
       curr_frame_mode_reg <= 0;
