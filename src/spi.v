@@ -134,13 +134,31 @@ module spi (
     end
   end
 
+  reg [SpiFrameWidth-1:0] tx_safe_buf;
+  reg tx_fetch_ready;
+  // we save a copy of the incoming tx/fir output
+  // we keep this copy so that in case we fail a spi transaction
+  // the tx/miso buffer doesnt get overwritten
+  // gives better protection if cs_n is pulled high mid spi transfer
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      tx_fetch_ready <= 1'b1;
+      tx_safe_buf <= 0;
+    end else if (cs_n_falling && tx_fetch_ready == 1'b1) begin
+      tx_fetch_ready <= 1'b0;
+      tx_safe_buf <= {tx_data_in, 4'b0000};
+    end else if (curr_st == Done) begin
+      tx_fetch_ready <= 1'b1;
+    end
+  end
+
   always @(negedge clk or negedge rst_n) begin
     if (~rst_n) begin
       tx_buf <= 0;
     end else if (curr_st == Busy && sclk_falling) begin
       tx_buf <= {tx_buf[SpiFrameWidth-2:0], 1'b0};
     end else if (cs_n_falling) begin
-      tx_buf <= {tx_data_in, 4'b0000};  // pad to fit 16 bit frame
+      tx_buf <= tx_fetch_ready == 1'b1 ? {tx_data_in, 4'b0000} : tx_safe_buf;
     end
   end
 
