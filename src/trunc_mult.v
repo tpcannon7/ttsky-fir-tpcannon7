@@ -1,8 +1,5 @@
 `default_nettype none
 
-// fixed issue with weighting in the accumulate stage (added shifter maybe change later if its too much area)
-// added shitty 2's complement fix for negative numbers (we're changing this)
-
 module trunc_mult #(
     parameter DataWidth = 12,
     parameter DropBits  = 11   // this is our dropped LSP bits

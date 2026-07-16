@@ -43,3 +43,12 @@ COCOTB_TEST_MODULES = fir_tb
 
 # include cocotb's make rules to take care of the simulator setup
 include $(shell cocotb-config --makefiles)/Makefile.sim
+
+.PHONY: plots
+plots:
+	COCOTB_TEST_FILTER=test_noisy_sine $(MAKE) sim && \
+	  mv noisy_sine_comparison.png ../docs/ && \
+	  mv error_histogram.png ../docs/ || true
+	COCOTB_TEST_FILTER=test_frequency_response $(MAKE) sim && mv freq_response.png ../docs/ || true
+	COCOTB_TEST_FILTER=test_impulse_response $(MAKE) sim && mv impulse_response.png ../docs/ || true
+	COCOTB_TEST_FILTER=test_step_response $(MAKE) sim && mv step_response.png ../docs/ || true

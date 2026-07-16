@@ -33,7 +33,16 @@ module fir_filter #(
   wire mac_cnt_full;
   assign mac_cnt_full = {1'b0, mac_idx} == Taps[$clog2(Taps):0] - 1'b1;
 
-  assign dout = acc[CoeffFracBits-DropBits+:12];
+  localparam OutLsb = CoeffFracBits - DropBits;
+  localparam OutMsb = OutLsb + 11;
+  localparam GuardBits = AccWidth - 1 - OutMsb;
+
+  wire overflow;
+  assign overflow = (acc[AccWidth-1:OutMsb+1] != {GuardBits{acc[OutMsb]}});
+
+  assign dout = overflow &  acc[OutMsb]  ? 12'h7FF :
+                overflow & ~acc[OutMsb]  ? 12'h800 :
+                acc[OutLsb +: 12];
 
   localparam [2:0] Idle = 3'b000, Ready = 3'b010, Compute = 3'b011, Done = 3'b100;
   reg [2:0] curr_st, next_st;
@@ -113,7 +122,7 @@ module fir_filter #(
   always @(posedge clk or negedge rst_n) begin : mac_idx_counter
     if (~rst_n) begin
       mac_idx <= 0;
-    end else if (curr_st == Compute) begin
+    end else if (curr_st == Compute && !mac_cnt_full) begin
       mac_idx <= mac_idx + 1'b1;
     end else if (curr_st != Compute) begin
       mac_idx <= 0;

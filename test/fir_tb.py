@@ -56,12 +56,10 @@ class SPIinterface:
     def __init__(self, spi_clock_period, dut):
         self.dut = dut
         self.spi_clock_period = spi_clock_period
-
         self.sclk = Clock(self.dut.spi_clock, self.spi_clock_period, "ns")
 
-    # transmit does duplex spi transmission 
-    async def transmit(self, data_in):
-        data_in = (data_in & 0x0FFF) << 4 # double check
+    async def _transmit(self, data_in):
+        data_in = (data_in & 0x0FFF) << 4
         rx_data = 0x0000
         self.dut.spi_cs_n.value = 0
         self.dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 0x0001
@@ -71,74 +69,62 @@ class SPIinterface:
             await RisingEdge(self.dut.spi_clock)
             out = int(self.dut.spi_miso.value)
             rx_data = (rx_data << 1) | out
-
-            # shift mosi on falling edge
             await FallingEdge(self.dut.spi_clock)
             data_in = (data_in << 1) & 0xFFFF
             self.dut.spi_mosi.value = (data_in >> (spi_frame_len - 1)) & 0x0001
-        
         self.sclk.stop()
         self.dut.spi_cs_n.value = 1
         await Timer(self.spi_clock_period, "ns")
-
         rx_data = (rx_data >> 4) & 0x0FFF
-
         if rx_data & 0x0800:
             rx_data -= 0x1000
         return rx_data
 
-    # coeff load using transmit()
-    async def load_coeff(self, coeffs):
-        self.dut.fir_mode.value = 0
-        rx = []
+    async def transfer(self, data, mode, reverse=False, append_nop=0):
+        self.dut.fir_mode.value = mode
         await RisingEdge(self.dut.clk)
-        # load in backwards due to coeffcient shift line
-        for coeff in coeffs[::-1]:
-            rx.append(await self.transmit(coeff))
 
-        self.dut.fir_mode.value = 1
-        return rx
+        if reverse:
+            data = data[::-1]
 
-    # sample load using transmit()
-    async def load_samples(self, samples):
         rx = []
-        self.dut.fir_mode.value = 1
-        for idx, s in enumerate(samples):
-            res = await self.transmit(s)
-            await RisingEdge(self.dut.clk)
-            rx.append(res)
+        for d in data:
+            rx.append(await self._transmit(d))
+            if mode == 1:
+                await RisingEdge(self.dut.clk)
 
-        for _ in range(nop_frames):
-            nop = await self.transmit(0x0000)
-            rx.append(nop)
+        for _ in range(append_nop):
+            rx.append(await self._transmit(0x0000))
 
         return rx
 
-    async def load_samples_random_bad_transact(self, samples, percent):
-        idx = 0
-        outputs = []
+    async def transfer_bad(self, data, mode, fault_rate, reverse=False):
         rng = np.random.default_rng()
+        rx = []
 
-        while idx < len(samples):
-            s_orig = samples[idx]
+        if reverse:
+            data = data[::-1]
 
+        idx = 0
+        while idx < len(data):
+            d = data[idx]
             out = 0x0000
-            s = (s_orig & 0x0FFF) << spi_frame_len - data_width
+            s = (d & 0x0FFF) << (spi_frame_len - data_width)
 
-            self.dut.fir_mode.value = 1
+            self.dut.fir_mode.value = mode
             self.dut.spi_cs_n.value = 0
             await RisingEdge(self.dut.clk)
             cocotb.start_soon(self.sclk.start(start_high=False))
             self.dut.spi_mosi.value = (s & 0x8000) >> (spi_frame_len - 1)
 
-            cs_high_flag = rng.random() < percent
-            cs_high_bit = rng.integers(low=1, high=spi_frame_len-1)
-
+            cs_high_flag = rng.random() < fault_rate
+            cs_high_bit = rng.integers(low=1, high=spi_frame_len - 1)
             bad_transact = False
 
             for bit_idx in range(spi_frame_len):
                 if cs_high_flag and bit_idx == cs_high_bit:
-                    cocotb.log.info(f"CS_N HIGH @ bit {bit_idx} of samples {idx} = {samples[idx]}")
+                    label = "coeff" if mode == 0 else "samples"
+                    cocotb.log.info(f"CS_N HIGH @ bit {bit_idx} of {label} {idx} = {data[idx]}")
                     self.dut.spi_cs_n.value = 1
                     self.sclk.stop()
                     await Timer(self.spi_clock_period, "ns")
@@ -157,72 +143,29 @@ class SPIinterface:
 
             self.sclk.stop()
             self.dut.spi_cs_n.value = 1
-            await Timer(spi_clock_period, "ns")
+            await Timer(self.spi_clock_period, "ns")
 
-            out = out >> spi_frame_len - data_width
-
+            out = out >> (spi_frame_len - data_width)
             if out & 0x0800:
                 out -= 0x1000
-            outputs.append(out)
-
+            rx.append(out)
             idx += 1
 
-        return outputs
+        return rx
+
+    async def load_coeff(self, coeffs):
+        result = await self.transfer(coeffs, mode=0, reverse=True)
+        self.dut.fir_mode.value = 1
+        return result
+
+    async def load_samples(self, samples, nop=nop_frames):
+        return await self.transfer(samples, mode=1, reverse=False, append_nop=nop)
 
     async def load_coeff_random_bad_transact(self, coeffs, percent):
-        idx = 0
-        coeffs_outputs = []
-        rng = np.random.default_rng()
+        return await self.transfer_bad(coeffs, mode=0, fault_rate=percent, reverse=True)
 
-        while idx < len(coeffs):
-            c_orig = coeffs[idx]
-
-            out = 0x0000
-            c = (c_orig & 0x0FFF) << spi_frame_len - data_width
-
-            self.dut.fir_mode.value = 0
-            self.dut.spi_cs_n.value = 0
-            await RisingEdge(self.dut.clk)
-            cocotb.start_soon(self.sclk.start(start_high=False))
-            self.dut.spi_mosi.value = (c & 0x8000) >> (spi_frame_len - 1)
-
-            cs_high_flag = rng.random() < percent
-            cs_high_bit = rng.integers(low=1, high=spi_frame_len-1)
-
-            bad_transact = False
-
-            for bit_idx in range(spi_frame_len):
-                if cs_high_flag and bit_idx == cs_high_bit:
-                    cocotb.log.info(f"CS_N HIGH @ bit {bit_idx} of coeff {idx} = {coeffs[idx]}")
-                    self.dut.spi_cs_n.value = 1
-                    self.sclk.stop()
-                    await Timer(self.spi_clock_period, "ns")
-                    bad_transact = True
-                    break
-
-                await RisingEdge(self.dut.spi_clock)
-                miso = int(self.dut.spi_miso.value)
-                await FallingEdge(self.dut.spi_clock)
-                c = (c << 1) & 0xFFFF
-                out = (out << 1) | miso
-                self.dut.spi_mosi.value = (c & 0x8000) >> (spi_frame_len - 1)
-
-            if bad_transact:
-                continue
-
-            self.sclk.stop()
-            self.dut.spi_cs_n.value = 1
-            await Timer(spi_clock_period, "ns")
-
-            out = out >> spi_frame_len - data_width
-
-            if out & 0x0800:
-                out -= 0x1000
-
-            coeffs_outputs.append(out)
-            idx += 1
-
-        return coeffs_outputs
+    async def load_samples_random_bad_transact(self, samples, percent):
+        return await self.transfer_bad(samples, mode=1, fault_rate=percent, reverse=False)
 
 @cocotb.test()
 async def test_impulse_response(dut):
@@ -256,6 +199,25 @@ async def test_impulse_response(dut):
     for idx, out in enumerate(outputs):
         assert abs(out - coeffs[idx]) <= 5, f"{out} does not match in acceptable range to {coeffs[idx]}"
 
+    plt.figure()
+    plt.subplot(2, 1, 1)
+    plt.plot(coeffs, 'b.--', label='ideal coeffs', linewidth=1.5)
+    plt.plot(outputs, 'r-', label='DUT output', linewidth=1)
+    plt.ylabel("Amplitude")
+    plt.title("Impulse Response")
+    plt.legend()
+    plt.subplot(2, 1, 2)
+    err = [outputs[i] - coeffs[i] for i in range(len(outputs))]
+    plt.plot(err, 'g-', linewidth=1)
+    plt.axhline(0, color='gray', linestyle=':', linewidth=0.5)
+    plt.ylabel("Error (LSB)")
+    plt.xlabel("Tap")
+    plt.tight_layout()
+    try:
+        plt.savefig('impulse_response.png')
+    except OSError as e:
+        cocotb.log.warning(f"Failed to save impulse_response plot: {e}")
+
 @cocotb.test()
 async def test_negative_impulse_response(dut):
     clk = Clock(dut.clk, clock_period, "ns")
@@ -276,14 +238,8 @@ async def test_negative_impulse_response(dut):
     await reset(dut)
     await spi.load_coeff(coeffs)
 
-    # increasing spi clock leads to latency during FIR compute
-    # 2 frame latency between input samples and output res on SPI MISO
-    # samples N's result is available on sample N+2's tranmission
     outputs = await spi.load_samples(samples)
-    cocotb.log.info(f"outputs (no trim) = {outputs}")
-    # trim garbage frames
     outputs = outputs[nop_frames:]
-    cocotb.log.info(f"outputs (trim leading garbage frames) = {outputs}")
 
     for idx, out in enumerate(outputs):
         assert abs(abs(out) - abs(coeffs[idx])) <= 5, f"{out} does not match in acceptable range to {coeffs[idx]}"
@@ -299,6 +255,7 @@ async def test_step_response(dut):
     # fixed point
     coeffs = h * normalize
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
+    coeffs_float = [c / float(normalize) for c in coeffs]
     cocotb.log.info(f"fixed coeffs = {coeffs}")
 
     # step response
@@ -314,12 +271,37 @@ async def test_step_response(dut):
     out = await spi.load_samples(samples)
     out = out[nop_frames:]
 
+    # python model
+    samples_float = [s / float(normalize) for s in samples]
+    y_lfilter = lfilter(h, 1.0, samples_float)
+    y_lfilter_int = [max(min_val, min(max_val, int(round(v * normalize)))) for v in y_lfilter]
+
     expected = sum(coeffs)
     cocotb.log.info(f"out = {out}")
     cocotb.log.info(f"exp = {expected}")
 
-    # across N taps we accumulate about error; for increasing # of taps we have more error due to serial MAC
-    assert abs(out[-1] - expected) <= 30, f"{out} does not match within error to {expected}"
+    for idx, v in enumerate(out):
+        assert abs(out[idx] - y_lfilter_int[idx]) <= 30, \
+            f"Step mismatch at sample {idx}: DUT={out[idx]} python={y_lfilter_int[idx]}"
+
+    plt.figure()
+    plt.subplot(2, 1, 1)
+    plt.plot(y_lfilter_int, 'b.--', label='python lfilter', linewidth=1.5)
+    plt.plot(out, 'r-', label='DUT', linewidth=1)
+    plt.ylabel("Amplitude")
+    plt.title("Step Response")
+    plt.legend()
+    plt.subplot(2, 1, 2)
+    err = [out[i] - y_lfilter_int[i] for i in range(len(out))]
+    plt.plot(err, 'g-', linewidth=1)
+    plt.axhline(0, color='gray', linestyle=':', linewidth=0.5)
+    plt.ylabel("Error (LSB)")
+    plt.xlabel("Sample")
+    plt.tight_layout()
+    try:
+        plt.savefig('step_response.png')
+    except OSError as e:
+        cocotb.log.warning(f"Failed to save step_response plot: {e}")
     
 @cocotb.test()
 async def test_noisy_sine(dut):
@@ -364,14 +346,26 @@ async def test_noisy_sine(dut):
     # trim initial garbage spi frames (stale miso/filter not ready)
     y_dut = y_dut[nop_frames:]
 
-    plt.plot(ts, yraw, 'k-')
-    plt.plot(ts, y_lfilter, 'r-')
-    plt.plot(ts, y_dut, 'c-')
+    plt.figure()
+    plt.plot(ts, yraw, 'k-', linewidth=0.5, label='raw')
+    plt.plot(ts, y_lfilter, 'r--', label='python filter', linewidth=1.5)
+    plt.plot(ts, y_dut, 'b-', label='DUT', linewidth=1)
     plt.xlabel("Time (s)")
     plt.ylabel("Amplitude")
     plt.title("Noisy Sinusoid Filtering, DUT vs. Python model")
-    plt.legend(["raw","python filter", "dut filter"])
-    plt.savefig('noisy_sine_comparison.png')
+    plt.legend()
+
+    ax = plt.axes([0.55, 0.2, 0.3, 0.3])
+    zoom_start = int(len(ts) * 0.2)
+    zoom_end = zoom_start + 60
+    ax.plot(ts[zoom_start:zoom_end], y_lfilter[zoom_start:zoom_end], 'r--', linewidth=1.5)
+    ax.plot(ts[zoom_start:zoom_end], y_dut[zoom_start:zoom_end], 'b-', linewidth=1)
+    ax.set_title("Zoomed (3 cycles)", fontsize=9)
+
+    try:
+        plt.savefig('noisy_sine_comparison.png')
+    except OSError as e:
+        cocotb.log.warning(f"Failed to save noisy_sine plot: {e}")
 
     gold_rms = math.sqrt(sum(x**2 for x in y_lfilter) / len(y_lfilter))
     dut_rms = math.sqrt(sum(x**2 for x in y_dut) / len(y_dut))
@@ -380,6 +374,17 @@ async def test_noisy_sine(dut):
 
     assert snr > 30.0, f"SNR = {snr} below acceptable threshold"
     cocotb.log.info(f"SNR = {snr}")
+
+    plt.figure()
+    errors = [g - d for g, d in zip(y_lfilter, y_dut)]
+    plt.hist(errors, bins=20, edgecolor='black')
+    plt.xlabel("Error")
+    plt.ylabel("Count")
+    plt.title(f"Filtering Error Histogram (SNR = {snr:.1f} dB)")
+    try:
+        plt.savefig('error_histogram.png')
+    except OSError as e:
+        cocotb.log.warning(f"Failed to save error_histogram plot: {e}")
 
 @cocotb.test()
 async def test_switching_inputs(dut):
@@ -441,15 +446,29 @@ async def test_frequency_response(dut):
     
     mag_dut = 20 * np.log10(np.maximum(abs(h_dut), 1e-6))
     mag_true = 20 * np.log10(np.maximum(abs(h_true), 1e-6))
+    phase_dut = np.angle(h_dut)
+    phase_true = np.angle(h_true)
 
+    plt.subplot(2, 1, 1)
     plt.title("Frequency Response of DUT vs. Python Model")
-    plt.plot(w_dut, mag_dut, 'r-', label="dut frequency response")
-    plt.plot(w_true, mag_true, 'c-', label="python model frequency response" )
+    plt.plot(w_dut, mag_dut, 'r-', label="DUT", linewidth=1)
+    plt.plot(w_true, mag_true, 'c--', label="python model", linewidth=1.5)
     plt.axvline(fc, color='black', linestyle=':', linewidth=0.8, label="fc")
-    plt.ylabel("Amplitude (dB)")
+    plt.ylabel("Magnitude (dB)")
+    plt.legend()
+
+    plt.subplot(2, 1, 2)
+    plt.plot(w_dut, phase_dut, 'r-', label="DUT", linewidth=1)
+    plt.plot(w_true, phase_true, 'c--', label="python model", linewidth=1.5)
+    plt.axvline(fc, color='black', linestyle=':', linewidth=0.8)
+    plt.ylabel("Phase (rad)")
     plt.xlabel("Frequency (Hz)")
     plt.legend()
-    plt.savefig('freq_response.png')
+    plt.tight_layout()
+    try:
+        plt.savefig('freq_response.png')
+    except OSError as e:
+        cocotb.log.warning(f"Failed to save freq_response plot: {e}")
 
 # verify that coeffcient shift reg behavior works as expected (coeffcients must be loaded in reverse order where final tap goes first etc.)
 @cocotb.test()
@@ -693,7 +712,7 @@ async def test_cs_n_assert_mid_frame(dut):
     cocotb.log.info(f"samples_out = {samples_out}")
 
     for idx,o in enumerate(samples_out):
-        assert abs(abs(o) - abs(coeffs[idx])) <= 5, f"erroneous cs_n fault coeff mismatch with {o} vs expected={coeffs[idx]}"
+        assert abs(o - coeffs[idx]) <= 5, f"erroneous cs_n fault coeff mismatch with {o} vs expected={coeffs[idx]}"
 
 @cocotb.test()
 async def test_coeff_reload(dut):

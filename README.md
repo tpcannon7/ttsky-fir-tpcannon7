@@ -33,3 +33,20 @@
 
 ## How to use
   - See [info.md](docs/info.md)
+
+## Results
+
+![Impulse Response](docs/impulse_response.png)
+*Impulse response: DUT output (red) vs ideal coefficients (blue) with per-tap error.*
+
+![Step Response](docs/step_response.png)
+*Step response: DUT (red) vs Python lfilter (blue) showing filter settling over 28 taps.*
+
+![Noisy Sine Filtering](docs/noisy_sine_comparison.png)
+*2kHz sinusoid + noise filtered by DUT (cyan) vs Python model (red). Zoomed inset shows 3 cycles.*
+
+![Frequency Response](docs/freq_response.png)
+*Magnitude and phase response of DUT (red) vs floating-point model (cyan) with fc marked.*
+
+![Error Histogram](docs/error_histogram.png)
+*Distribution of filtering error across all samples. SNR is typically above 30dB.*
