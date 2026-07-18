@@ -44,7 +44,7 @@ module fir_filter #(
   // if bits in the accumulator above our 12 bit output slice don't match to our output slice sign bit
   // we know we have overflowed out of the 12 bit output slice result
   wire overflow;
-  assign overflow = (acc[AccWidth-1:OutMsb+1] != {GuardBits{output_slice[OutputWidth-1]}});
+  assign overflow = (acc[AccWidth-1:OutMsb+1] != {GuardBits{acc[OutMsb]}});
 
   // clamp our output
   assign dout = (overflow &  ~acc[AccWidth-1])  ? 12'h7FF :

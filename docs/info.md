@@ -126,7 +126,7 @@ The DUT step response (red) vs Python lfilter (blue). The FIR fills in over 28 t
 
 ![Frequency Response](freq_response.png)
 
-The frequency response of the 12-bit fixed-point model (Q12.0 samples, Q1.11 coeffcients) vs the Python ideal model (floating-point). Frequency respone generated with 50-60KHz band-pass coeffcients.
+The frequency response of the 12-bit fixed-point model (Q12.0 samples, Q1.11 coeffcients) vs the Python ideal model (floating-point). Frequency response generated with 50-60KHz band-pass coeffcients.
 
 ## Noisy Sine Filtering
 

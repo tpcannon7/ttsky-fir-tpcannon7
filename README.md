@@ -7,7 +7,7 @@
   - SPI Interface (Mode 0)
   - Internal clock @ 25 MHz
   - SKY130 PDK
-  - **See [info.md](docs/info.md) for more information relating to architecture and SPI operation**
+  - **See [info.md](docs/info.md) for more information relating to architecture and general operation**
 
 ## Project Structure
 
@@ -31,9 +31,6 @@
 |`uio_in[1]`  |MOSI |
 |`uio_out[2]` |MISO |
 |`uio_in[3]`  | SCLK| 
-
-## How to use
-  - See [info.md](docs/info.md)
 
 ## Impulse Response
 
