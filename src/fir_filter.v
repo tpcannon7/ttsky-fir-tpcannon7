@@ -20,6 +20,7 @@ module fir_filter #(
   localparam DropBits = 8;
   localparam TruncOutWidth = (SampleWidth * 2) - DropBits;
   localparam CoeffFracBits = CoeffWidth - 1;
+  localparam OutputWidth = 12;
   // AccWidth depends on output width from trunc_mult 
   localparam AccWidth = ((SampleWidth + CoeffWidth) - DropBits) + $clog2(Taps);
 
@@ -35,14 +36,20 @@ module fir_filter #(
 
   localparam OutLsb = CoeffFracBits - DropBits;
   localparam OutMsb = OutLsb + 11;
-  localparam GuardBits = AccWidth - 1 - OutMsb;
+  localparam GuardBits = AccWidth - OutputWidth - (CoeffFracBits - DropBits);
 
+  wire [11:0] output_slice;
+  assign output_slice = acc[OutLsb+:12];
+
+  // if bits in the accumulator above our 12 bit output slice don't match to our output slice sign bit
+  // we know we have overflowed out of the 12 bit output slice result
   wire overflow;
-  assign overflow = (acc[AccWidth-1:OutMsb+1] != {GuardBits{acc[OutMsb]}});
+  assign overflow = (acc[AccWidth-1:OutMsb+1] != {GuardBits{output_slice[OutputWidth-1]}});
 
-  assign dout = overflow &  acc[OutMsb]  ? 12'h7FF :
-                overflow & ~acc[OutMsb]  ? 12'h800 :
-                acc[OutLsb +: 12];
+  // clamp our output
+  assign dout = (overflow &  ~acc[AccWidth-1])  ? 12'h7FF :
+                (overflow & acc[AccWidth-1])  ? 12'h800 :
+                output_slice;
 
   localparam [2:0] Idle = 3'b000, Ready = 3'b010, Compute = 3'b011, Done = 3'b100;
   reg [2:0] curr_st, next_st;

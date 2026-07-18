@@ -25,8 +25,8 @@ normalize = ((2**(data_width-1)))
 
 # Hz
 fc = 10000
-fc1 = 2000
-fc2 = 5000
+fc1 = 50000
+fc2 = 60000
 # extra spi clock period term to account for cs_n high between frames
 total_spi_frame_time = (spi_clock_period * spi_frame_len) + spi_clock_period
 fs = (1 / (total_spi_frame_time * 1e-9))
@@ -196,23 +196,24 @@ async def test_impulse_response(dut):
     outputs = outputs[nop_frames:]
     cocotb.log.info(f"outputs (trim leading garbage frames) = {outputs}")
 
+    samples_float = [s / float(normalize) for s in samples]
+    y_lfilter = lfilter(h, 1.0, samples_float)
+    y_lfilter_int = y_lfilter * normalize
+    y_lfilter_int = [max(min_val, min(max_val, int(round(v)))) for v in y_lfilter_int]
+
+    cocotb.log.info(f"python lfilter = {y_lfilter_int}")
+
     for idx, out in enumerate(outputs):
-        assert abs(out - coeffs[idx]) <= 5, f"{out} does not match in acceptable range to {coeffs[idx]}"
+        assert abs(out - coeffs[idx]) <= 5, f"{out} does not match in acceptable range to {y_lfilter_int[idx]}"
 
     plt.figure()
-    plt.subplot(2, 1, 1)
-    plt.plot(coeffs, 'b.--', label='ideal coeffs', linewidth=1.5)
+    plt.plot(y_lfilter_int, 'b.--', label='python lfilter', linewidth=1.5)
     plt.plot(outputs, 'r-', label='DUT output', linewidth=1)
-    plt.ylabel("Amplitude")
-    plt.title("Impulse Response")
+    plt.ylabel("Amplitude (Integer Steps)")
+    plt.xlabel("Sample Count")
+    plt.title("Impulse Response: DUT vs. Python Model")
     plt.legend()
-    plt.subplot(2, 1, 2)
-    err = [outputs[i] - coeffs[i] for i in range(len(outputs))]
-    plt.plot(err, 'g-', linewidth=1)
-    plt.axhline(0, color='gray', linestyle=':', linewidth=0.5)
-    plt.ylabel("Error (LSB)")
-    plt.xlabel("Tap")
-    plt.tight_layout()
+
     try:
         plt.savefig('impulse_response.png')
     except OSError as e:
@@ -285,19 +286,13 @@ async def test_step_response(dut):
             f"Step mismatch at sample {idx}: DUT={out[idx]} python={y_lfilter_int[idx]}"
 
     plt.figure()
-    plt.subplot(2, 1, 1)
     plt.plot(y_lfilter_int, 'b.--', label='python lfilter', linewidth=1.5)
     plt.plot(out, 'r-', label='DUT', linewidth=1)
-    plt.ylabel("Amplitude")
-    plt.title("Step Response")
+    plt.ylabel("Amplitude (Integer Steps)")
+    plt.xlabel("Sample Count")
+    plt.title("Step Response: DUT vs. Python Model")
     plt.legend()
-    plt.subplot(2, 1, 2)
-    err = [out[i] - y_lfilter_int[i] for i in range(len(out))]
-    plt.plot(err, 'g-', linewidth=1)
-    plt.axhline(0, color='gray', linestyle=':', linewidth=0.5)
-    plt.ylabel("Error (LSB)")
-    plt.xlabel("Sample")
-    plt.tight_layout()
+
     try:
         plt.savefig('step_response.png')
     except OSError as e:
@@ -348,19 +343,12 @@ async def test_noisy_sine(dut):
 
     plt.figure()
     plt.plot(ts, yraw, 'k-', linewidth=0.5, label='raw')
-    plt.plot(ts, y_lfilter, 'r--', label='python filter', linewidth=1.5)
-    plt.plot(ts, y_dut, 'b-', label='DUT', linewidth=1)
+    plt.plot(ts, y_lfilter, 'b--', label='python lfilter', linewidth=1.5)
+    plt.plot(ts, y_dut, 'r-', label='DUT', linewidth=1)
     plt.xlabel("Time (s)")
     plt.ylabel("Amplitude")
-    plt.title("Noisy Sinusoid Filtering, DUT vs. Python model")
+    plt.title("Noisy Sinusoid Filtering: DUT vs. Python model")
     plt.legend()
-
-    ax = plt.axes([0.55, 0.2, 0.3, 0.3])
-    zoom_start = int(len(ts) * 0.2)
-    zoom_end = zoom_start + 60
-    ax.plot(ts[zoom_start:zoom_end], y_lfilter[zoom_start:zoom_end], 'r--', linewidth=1.5)
-    ax.plot(ts[zoom_start:zoom_end], y_dut[zoom_start:zoom_end], 'b-', linewidth=1)
-    ax.set_title("Zoomed (3 cycles)", fontsize=9)
 
     try:
         plt.savefig('noisy_sine_comparison.png')
@@ -374,17 +362,6 @@ async def test_noisy_sine(dut):
 
     assert snr > 30.0, f"SNR = {snr} below acceptable threshold"
     cocotb.log.info(f"SNR = {snr}")
-
-    plt.figure()
-    errors = [g - d for g, d in zip(y_lfilter, y_dut)]
-    plt.hist(errors, bins=20, edgecolor='black')
-    plt.xlabel("Error")
-    plt.ylabel("Count")
-    plt.title(f"Filtering Error Histogram (SNR = {snr:.1f} dB)")
-    try:
-        plt.savefig('error_histogram.png')
-    except OSError as e:
-        cocotb.log.warning(f"Failed to save error_histogram plot: {e}")
 
 @cocotb.test()
 async def test_switching_inputs(dut):
@@ -431,7 +408,7 @@ async def test_frequency_response(dut):
     await reset(dut)
 
     # generate coeffs
-    h = firwin(taps, fc, fs=fs)
+    h = firwin(taps, [fc1, fc2], pass_zero=False, fs=fs)
     # fixed point
     coeffs = h * normalize
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
@@ -450,17 +427,16 @@ async def test_frequency_response(dut):
     phase_true = np.angle(h_true)
 
     plt.subplot(2, 1, 1)
-    plt.title("Frequency Response of DUT vs. Python Model")
-    plt.plot(w_dut, mag_dut, 'r-', label="DUT", linewidth=1)
-    plt.plot(w_true, mag_true, 'c--', label="python model", linewidth=1.5)
-    plt.axvline(fc, color='black', linestyle=':', linewidth=0.8, label="fc")
+    plt.title("Frequency Response of 12-bit fixed point vs. Python Model")
+    plt.plot(w_dut, mag_dut, 'r-', label="12-bit fixed-point", linewidth=1)
+    plt.plot(w_true, mag_true, 'b--', label="python model", linewidth=1.5)
     plt.ylabel("Magnitude (dB)")
     plt.legend()
 
     plt.subplot(2, 1, 2)
-    plt.plot(w_dut, phase_dut, 'r-', label="DUT", linewidth=1)
-    plt.plot(w_true, phase_true, 'c--', label="python model", linewidth=1.5)
-    plt.axvline(fc, color='black', linestyle=':', linewidth=0.8)
+    plt.plot(w_dut, phase_dut, 'r-', label="12-bit fixed-point", linewidth=1)
+    plt.plot(w_true, phase_true, 'b--', label="python model", linewidth=1.5)
+
     plt.ylabel("Phase (rad)")
     plt.xlabel("Frequency (Hz)")
     plt.legend()
@@ -761,12 +737,29 @@ async def test_coeff_reload(dut):
     for idx, o in enumerate(c_other_impulse_trim):
         assert abs(o - coeffs_other[idx]) <= 5; f"impulse response {o} does not match {coeffs_other[idx]}"
 
-# @cocotb.test()
-# async def test_overflow(dut):
-#     pass
+@cocotb.test()
+async def test_overflow(dut):
+    clk = Clock(dut.clk, clock_period, "ns")
+    cocotb.start_soon(clk.start())
+    spi = SPIinterface(spi_clock_period, dut)
 
-# @cocotb.test()
-# async def test_short_inter_frame_time(dut):
-#     # instead of await Timer(spi_clock_period) between frames maybe only one
-#     # fast clock cycle
-#     pass
+    coeffs = [max_val] * taps
+    samples = [max_val] * (taps * 2)
+
+    cocotb.log.info("----------------------------------")
+    cocotb.log.info("          OVERFLOW TEST           ")
+    cocotb.log.info("----------------------------------")
+
+    await reset(dut)
+    await spi.load_coeff(coeffs)
+    
+    outputs = await spi.load_samples(samples)
+    outputs = outputs[nop_frames:]
+
+    cocotb.log.info(f"outputs = {outputs}")
+    prev_sample = 0
+    for n in outputs:
+        assert n >= prev_sample
+        prev_sample = n
+
+    
