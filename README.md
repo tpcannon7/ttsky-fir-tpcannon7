@@ -7,7 +7,10 @@
   - SPI Interface (Mode 0)
   - Internal clock @ 25 MHz
   - SKY130 PDK
-  - **See [info.md](docs/info.md) for more information relating to architecture and general operation**
+  - **See [info.md](docs/info.md) for more information**
+    - [General Operation](docs/info.md#general-operation)
+    - [SPI Operation](docs/info.md#spi-overview)
+    - [Truncated Baugh-Wooley Multiplier Design](docs/info.md#truncated-baugh-wooley-multiplier-design)
 
 ## Project Structure
 
