@@ -29,7 +29,7 @@
 
 | Pin | Usage |
 | --- |----   |
-|`ui_in[0]`   | MODE pin for coefficient vs sample loading |
+|`ui_in[0]`   | FIR_MODE pin for coefficient vs sample loading |
 |`uio_in[0]`  |CS_N |
 |`uio_in[1]`  |MOSI |
 |`uio_out[2]` |MISO |

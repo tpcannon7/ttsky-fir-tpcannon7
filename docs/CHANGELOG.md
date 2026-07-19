@@ -39,7 +39,7 @@
 
 - Updated some docs + new tests
 
-- Added `spi.v` MISO tristate control, mid-frame cs_n fault injection tests
+- Added `spi.v` MISO ~~tristate~~ (MISO is driven LOW during idle) control, mid-frame cs_n fault injection tests
 - Full test suite: impulse, negative impulse, step, noisy sine, switching inputs,
   frequency response, non-symmetric coeffs, mid-sample coeff reload,
   cs_n mid-frame fault, coeff reload

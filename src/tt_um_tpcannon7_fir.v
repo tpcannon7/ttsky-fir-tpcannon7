@@ -22,6 +22,42 @@ module tt_um_tpcannon7_fir (
   assign uio_oe = 8'b00000100;
   assign uo_out = 8'b00000000;
 
+  wire [11:0] spi_tx_data, spi_rx_data;
+  wire spi_curr_frame_fir_mode, spi_rx_valid;
+  wire control_curr_frame_mode;
+
+  spi spi (
+      .clk(clk),
+      .rst_n(rst_n),
+      .cs_n(uio_in[0]),
+      .mosi(uio_in[1]),
+      .miso(uio_out[2]),
+      .sclk(uio_in[3]),
+      .fir_mode(ui_in[0]),
+      .rx_data_out(spi_rx_data),
+      .tx_data_in(spi_tx_data),
+      .curr_frame_fir_mode(spi_curr_frame_fir_mode),
+      .spi_rx_valid(spi_rx_valid)
+  );
+
+  wire [11:0] filter_in, filter_out;
+  
+  control control (
+      .clk(clk),
+      .rst_n(rst_n),
+      .spi_rx_data(spi_rx_data),
+      .spi_tx_data(spi_tx_data),
+      .dout_fir(filter_out),
+      .din_fir(filter_in),
+      .spi_rx_valid(spi_rx_valid),
+      .spi_curr_frame_fir_mode(spi_curr_frame_fir_mode),
+      .fir_out_valid(fir_out_valid),
+      .control_out_ready(control_out_ready),
+      .fir_in_ready(fir_in_ready),
+      .control_in_valid(control_in_valid),
+      .control_curr_frame_fir_mode(control_curr_frame_mode)
+  );
+
   wire fir_in_ready, fir_out_valid;
   wire control_in_valid, control_out_ready;
 
@@ -37,41 +73,6 @@ module tt_um_tpcannon7_fir (
       .out_ready(control_out_ready),
       .in_ready(fir_in_ready),
       .out_valid(fir_out_valid)
-  );
-
-  wire [11:0] spi_tx_data, spi_rx_data;
-  wire spi_curr_frame_mode, spi_rx_valid;
-  wire control_curr_frame_mode;
-
-  spi spi (
-      .clk(clk),
-      .rst_n(rst_n),
-      .cs_n(uio_in[0]),
-      .mosi(uio_in[1]),
-      .miso(uio_out[2]),
-      .sclk(uio_in[3]),
-      .mode(ui_in[0]),
-      .rx_data_out(spi_rx_data),
-      .tx_data_in(spi_tx_data),
-      .curr_frame_mode(spi_curr_frame_mode),
-      .spi_rx_valid(spi_rx_valid)
-  );
-
-  wire [11:0] filter_in, filter_out;
-  control control (
-      .clk(clk),
-      .rst_n(rst_n),
-      .spi_rx_data(spi_rx_data),
-      .spi_tx_data(spi_tx_data),
-      .dout_fir(filter_out),
-      .din_fir(filter_in),
-      .spi_rx_valid(spi_rx_valid),
-      .spi_curr_frame_mode(spi_curr_frame_mode),
-      .fir_out_valid(fir_out_valid),
-      .control_out_ready(control_out_ready),
-      .fir_in_ready(fir_in_ready),
-      .control_in_valid(control_in_valid),
-      .control_curr_frame_mode(control_curr_frame_mode)
   );
 
   // List all unused inputs to prevent warnings

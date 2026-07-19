@@ -5,6 +5,7 @@ from scipy.signal import firwin, lfilter, chirp, freqz
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+import os
 
 # clock period (ns)
 clock_period = 40 # 25mhz
@@ -31,6 +32,9 @@ fc2 = 60000
 total_spi_frame_time = (spi_clock_period * spi_frame_len) + spi_clock_period
 fs = (1 / (total_spi_frame_time * 1e-9))
 
+# random test seeding
+TEST_SEED = int(os.getenv("FIR_TB_SEED", "12345"))
+
 # bidirect pins
 CS_N = 0x01
 MOSI = 0x02
@@ -56,10 +60,11 @@ async def reset(dut):
 
 # spi interface wrapper
 class SPIinterface:
-    def __init__(self, spi_clock_period, dut):
+    def __init__(self, spi_clock_period, dut, seed=TEST_SEED):
         self.dut = dut
         self.spi_clock_period = spi_clock_period
         self.sclk = Clock(self.dut.spi_clock, self.spi_clock_period, "ns")
+        self.rng = np.random.default_rng(seed)
 
     async def _transmit(self, data_in):
         data_in = (data_in & 0x0FFF) << 4
@@ -102,7 +107,6 @@ class SPIinterface:
         return rx
 
     async def transfer_bad(self, data, mode, fault_rate, reverse=False):
-        rng = np.random.default_rng()
         rx = []
 
         if reverse:
@@ -120,8 +124,8 @@ class SPIinterface:
             cocotb.start_soon(self.sclk.start(start_high=False))
             self.dut.spi_mosi.value = (s & 0x8000) >> (spi_frame_len - 1)
 
-            cs_high_flag = rng.random() < fault_rate
-            cs_high_bit = rng.integers(low=1, high=spi_frame_len - 1)
+            cs_high_flag = self.rng.random() < fault_rate
+            cs_high_bit = self.rng.integers(low=1, high=spi_frame_len - 1)
             bad_transact = False
 
             for bit_idx in range(spi_frame_len):
@@ -192,7 +196,7 @@ async def test_impulse_response(dut):
 
     # increasing spi clock leads to latency during FIR compute
     # 2 frame latency between input samples and output res on SPI MISO
-    # samples N's result is available on sample N+2's tranmission
+    # samples N's result is available on sample N+2's transmission
     outputs = await spi.load_samples(samples)
     cocotb.log.info(f"outputs (no trim) = {outputs}")
     # trim garbage frames
@@ -307,6 +311,8 @@ async def test_noisy_sine(dut):
     cocotb.start_soon(clk.start())
     spi = SPIinterface(spi_clock_period, dut)
 
+    rng = np.random.default_rng(TEST_SEED)
+
     # generate coeffs
     h = firwin(taps, fc, fs=fs)
     # fixed point
@@ -320,7 +326,7 @@ async def test_noisy_sine(dut):
     n_samples = int(fs * duration)
     ts = np.linspace(0,duration,n_samples, endpoint=False)
     ys = np.sin(2*np.pi * freq * ts)
-    yerr = 0.5 * np.random.normal(size=len(ts))
+    yerr = 0.5 * rng.normal(size=len(ts))
     yraw = ys + yerr
 
     y_dut = []
@@ -663,8 +669,6 @@ async def test_cs_n_assert_mid_frame(dut):
     coeffs = h * normalize
     coeffs = [max(min_val,min(max_val,int(round(c)))) for c in coeffs]
 
-    rng = np.random.default_rng()
-
     samples = [max_val] + [0] * (taps - 1)
     nop = [0x0000] * nop_frames
 
@@ -762,7 +766,9 @@ async def test_overflow(dut):
     cocotb.log.info(f"outputs = {outputs}")
     prev_sample = 0
     for n in outputs:
-        assert n >= prev_sample
+        assert n >= prev_sample, f"{n} should be greater equal to prev sample={prev_sample}"
         prev_sample = n
+    
+    assert outputs[-1] == max_val, f"{outputs[-1]} is not the saturated max_val of {max_val}"
 
     

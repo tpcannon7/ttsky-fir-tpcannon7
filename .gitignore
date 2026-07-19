@@ -16,3 +16,4 @@ test/*.png
 */__pycache__
 */sim_build
 */results.xml
+TODO.md

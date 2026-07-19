@@ -28,7 +28,7 @@ module trunc_mult #(
   // product array
   // a == y, b == x
   generate
-    for (product_column = DropBits; product_column < OutputWidth; product_column++) begin
+    for (product_column = DropBits; product_column < OutputWidth; product_column++) begin : gen_pps
       always @(*) begin
         partial_products[product_column-DropBits] = '0;
         for (a_idx = 0; a_idx < DataWidth; a_idx++) begin
@@ -55,7 +55,7 @@ module trunc_mult #(
 
   integer col_idx, bit_idx;
   // sum partial product arrays
-  always @(*) begin
+  always @(*) begin : comb_sum_partial_products
     for (col_idx = DropBits; col_idx < OutputWidth; col_idx++) begin
       sum_products[col_idx-DropBits] = '0;
 
@@ -77,7 +77,7 @@ module trunc_mult #(
   // partial produts for the error correct IC column
   // separate from above genblk because ran into indexing issues
   reg [DataWidth-1:0] ic_column;
-  always @(*) begin
+  always @(*) begin : comb_ic_column_partial_product
     ic_column = '0;
     for (a_idx = 0; a_idx < DataWidth; a_idx++) begin
       for (b_idx = 0; b_idx < DataWidth; b_idx++) begin
@@ -96,10 +96,10 @@ module trunc_mult #(
   // "Low error Truncated Multipliers for DSP applications" Garafolo et al.
   reg [2:0] edge_ic;
   reg [3:0] middle_ic;
-  always @(*) begin
+  always @(*) begin : comb_middle_edge_error_ic_terms
     edge_ic   = 0;
     middle_ic = 0;
-    for (bit_idx = 0; bit_idx <= DataWidth - H; bit_idx++) begin
+    for (bit_idx = 0; bit_idx < DataWidth - H; bit_idx++) begin
       if (bit_idx == 0 || bit_idx == 1 || bit_idx == DataWidth - H - 2 || bit_idx == DataWidth - H - 1) begin
         edge_ic = edge_ic + ic_column[bit_idx];
       end else begin
@@ -110,7 +110,7 @@ module trunc_mult #(
 
   // accumulate sum of partial products into final accumulator (and shift to account for column weighting)
   integer product_idx;
-  always @(*) begin
+  always @(*) begin : comb_accumulate_sum_products
     accumulate = '0;
     for (product_idx = DropBits; product_idx < OutputWidth; product_idx++) begin
       // "1" term added in the final bit column sum
