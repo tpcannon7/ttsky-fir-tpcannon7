@@ -16,7 +16,7 @@ spi_frame_len = 16
 nop_frames = 2
 
 # params
-taps = 26
+taps = 28
 data_width = 12
 
 # max/min values for bit widths
