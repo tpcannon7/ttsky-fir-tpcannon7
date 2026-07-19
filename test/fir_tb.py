@@ -211,7 +211,7 @@ async def test_impulse_response(dut):
     cocotb.log.info(f"python lfilter = {y_lfilter_int}")
 
     for idx, out in enumerate(outputs):
-        assert abs(out - coeffs[idx]) <= 5, f"{out} does not match in acceptable range to {y_lfilter_int[idx]}"
+        assert abs(out - y_lfilter_int[idx]) <= 3, f"{out} does not match in acceptable range to {y_lfilter_int[idx]}"
 
     plt.figure()
     plt.plot(y_lfilter_int, 'b.--', label='python lfilter', linewidth=1.5)
@@ -471,7 +471,7 @@ async def test_non_symmetric_coeff(dut):
 
     
     cocotb.log.info("----------------------------------")
-    cocotb.log.info("    NON-SYMMETRIC COEFFICIENTS     ")
+    cocotb.log.info("    NON-SYMMETRIC COEFFICIENTS    ")
     cocotb.log.info("----------------------------------")
 
     await reset(dut)

@@ -6,7 +6,7 @@ module fir_filter #(
     input wire clk,
     input wire rst_n,
     input wire signed [11:0] din,
-    input wire mode, // FIR mode; ModeSample = 1, ModeCoeff = 0
+    input wire mode,  // FIR mode; ModeSample = 1, ModeCoeff = 0
     input wire in_valid,
     input wire out_ready,
 
@@ -78,7 +78,7 @@ module fir_filter #(
         end
       end
       Compute: begin
-        if (mac_cnt_full) begin
+        if (mac_cnt_full && mac_busy) begin
           next_st = Done;
         end
       end
@@ -125,14 +125,38 @@ module fir_filter #(
     end
   end
 
+  // 
+  // always @(posedge clk or negedge rst_n) begin : mac_idx_counter
+  //   if (~rst_n) begin
+  //     mac_idx <= 0;
+  //   end else if (curr_st == Compute && !mac_cnt_full) begin
+  //     mac_idx <= mac_idx + 1'b1;
+  //   end else if (curr_st != Compute) begin
+  //     mac_idx <= 0;
+  //   end
+  // end
+
   reg [$clog2(Taps)-1:0] mac_idx;
-  always @(posedge clk or negedge rst_n) begin : mac_idx_counter
+  reg mac_busy;
+  reg signed [11:0] curr_sample, curr_coeff;
+  always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
+      mac_busy <= 1'b0;
+      curr_sample <= 0;
+      curr_coeff <= 0;
       mac_idx <= 0;
-    end else if (curr_st == Compute && !mac_cnt_full) begin
-      mac_idx <= mac_idx + 1'b1;
     end else if (curr_st != Compute) begin
+      mac_busy <= 1'b0;
+      curr_coeff <= 0;
+      curr_sample <= 0;
       mac_idx <= 0;
+    end else if (curr_st == Compute && mac_busy == 1'b0) begin
+      mac_busy <= 1'b1;
+      curr_coeff <= coeff[mac_idx];
+      curr_sample <= samples[mac_idx];
+    end else if (curr_st == Compute && !mac_cnt_full && mac_busy == 1'b1) begin
+      mac_busy <= ~mac_busy;
+      mac_idx  <= mac_idx + 1'b1;
     end
   end
 
@@ -142,8 +166,8 @@ module fir_filter #(
       acc <= 0;
     end else if (curr_st != Compute && curr_st != Done) begin
       acc <= 0;
-    end else if (curr_st == Compute) begin
-      acc <= acc + trunc_out;
+    end else if (curr_st == Compute && mac_busy == 1'b1) begin
+      acc <= acc + {{AccWidth - TruncOutWidth{trunc_out[TruncOutWidth-1]}}, trunc_out};
     end
   end
 
@@ -152,8 +176,8 @@ module fir_filter #(
       .DataWidth(SampleWidth),
       .DropBits (DropBits)
   ) mult (
-      .a  (samples[mac_idx]),
-      .b  (coeff[mac_idx]),
+      .a  (curr_sample),
+      .b  (curr_coeff),
       .out(trunc_out)
   );
 
