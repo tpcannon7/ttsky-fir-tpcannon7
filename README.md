@@ -2,21 +2,21 @@
 
 ## D-FIR: A Tiny Tapeout FIR Filter
 
-  - 12 bit samples/coeffcients, 28 Taps
-  - Runtime coeffcient reprogramming
+  - 12 bit samples/coefficients, 28 Taps
+  - Runtime coefficient reprogramming
   - SPI Interface (Mode 0)
   - Internal clock @ 25 MHz
   - SKY130 PDK
   - **See [info.md](docs/info.md) for more information**
     - [General Operation](docs/info.md#general-operation)
-    - [SPI Operation](docs/info.md#spi-overview)
+    - [SPI Overview](docs/info.md#spi-overview)
     - [Truncated Baugh-Wooley Multiplier Design](docs/info.md#truncated-baugh-wooley-multiplier-design)
 
 ## Project Structure
 
  - `src/`: Verilog design files directory
-    - `tt_um_tpcannon7.v`: Tiny Tapeout Top Level Wrapper
-    - `fir_filter.v`: Core FIR logic, samples/coeffcient shift lines, truncated multiplier module
+    - `tt_um_tpcannon7_fir.v`: Tiny Tapeout Top Level Wrapper
+    - `fir_filter.v`: Core FIR logic, samples/coefficient shift lines, truncated multiplier module
     - `trunc_mult.v`: Truncated Baugh-Wooley (Signed) 12x12 bit multiplier module
     - `spi.v`: SPI slave interface
     - `control.v`: Small control/routing layer to buffer SPI RX/TX and FIR core I/O
@@ -29,7 +29,7 @@
 
 | Pin | Usage |
 | --- |----   |
-|`ui_in[0]`   | MODE pin for coeffcient vs sample loading |
+|`ui_in[0]`   | MODE pin for coefficient vs sample loading |
 |`uio_in[0]`  |CS_N |
 |`uio_in[1]`  |MOSI |
 |`uio_out[2]` |MISO |
@@ -51,7 +51,7 @@
 
 ![Noisy Sine Filtering](docs/noisy_sine_comparison.png)
 
-- 2KHz sinusoid with added Gaussian noise, filtered with 10KHz low pass coeffcients
+- 2KHz sinusoid with added Gaussian noise, filtered with 10KHz low pass coefficients
 
 ## Frequency Response
 

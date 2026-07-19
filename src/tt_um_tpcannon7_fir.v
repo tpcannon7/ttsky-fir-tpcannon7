@@ -50,7 +50,7 @@ module tt_um_tpcannon7_fir (
       .mosi(uio_in[1]),
       .miso(uio_out[2]),
       .sclk(uio_in[3]),
-      .mode(ui_in[0]),  // add rest to unused?
+      .mode(ui_in[0]),
       .rx_data_out(spi_rx_data),
       .tx_data_in(spi_tx_data),
       .curr_frame_mode(spi_curr_frame_mode),

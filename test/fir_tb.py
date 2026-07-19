@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 
-# clock perod (ns)
+# clock period (ns)
 clock_period = 40 # 25mhz
 # spi clock of 1-4mhz requires 2 NOP frames
 # spi clock 5mhz < (not sure bounds) requires 4+ nop frames
@@ -37,8 +37,11 @@ MOSI = 0x02
 MISO = 0x04
 SCLK = 0x08
 
+MODE_COEFF = 0x0000
+MODE_SAMPLE = 0x0001
+
 async def reset(dut):
-    dut.fir_mode.value = 1
+    dut.fir_mode.value = MODE_SAMPLE
     dut.spi_clock.value = 0
     dut.spi_cs_n.value = 1
     dut.spi_mosi.value = 1
@@ -154,18 +157,18 @@ class SPIinterface:
         return rx
 
     async def load_coeff(self, coeffs):
-        result = await self.transfer(coeffs, mode=0, reverse=True)
-        self.dut.fir_mode.value = 1
+        result = await self.transfer(coeffs, mode=MODE_COEFF, reverse=True)
+        self.dut.fir_mode.value = MODE_SAMPLE
         return result
 
     async def load_samples(self, samples, nop=nop_frames):
-        return await self.transfer(samples, mode=1, reverse=False, append_nop=nop)
+        return await self.transfer(samples, mode=MODE_SAMPLE, reverse=False, append_nop=nop)
 
     async def load_coeff_random_bad_transact(self, coeffs, percent):
-        return await self.transfer_bad(coeffs, mode=0, fault_rate=percent, reverse=True)
+        return await self.transfer_bad(coeffs, mode=MODE_COEFF, fault_rate=percent, reverse=True)
 
     async def load_samples_random_bad_transact(self, samples, percent):
-        return await self.transfer_bad(samples, mode=1, fault_rate=percent, reverse=False)
+        return await self.transfer_bad(samples, mode=MODE_SAMPLE, fault_rate=percent, reverse=False)
 
 @cocotb.test()
 async def test_impulse_response(dut):
@@ -446,7 +449,7 @@ async def test_frequency_response(dut):
     except OSError as e:
         cocotb.log.warning(f"Failed to save freq_response plot: {e}")
 
-# verify that coeffcient shift reg behavior works as expected (coeffcients must be loaded in reverse order where final tap goes first etc.)
+# verify that coefficient shift reg behavior works as expected (coefficients must be loaded in reverse order where final tap goes first etc.)
 @cocotb.test()
 async def test_non_symmetric_coeff(dut):
     clk = Clock(dut.clk, clock_period, "ns")
@@ -462,7 +465,7 @@ async def test_non_symmetric_coeff(dut):
 
     
     cocotb.log.info("----------------------------------")
-    cocotb.log.info("    NON-SYMMETRIC COEFFCIENTS     ")
+    cocotb.log.info("    NON-SYMMETRIC COEFFICIENTS     ")
     cocotb.log.info("----------------------------------")
 
     await reset(dut)
@@ -513,7 +516,7 @@ async def test_load_coeffs_mid_sample_drive(dut):
         for _ in range(nop_frames):
             out = 0x0000
             nop = 0x0000
-            dut.fir_mode.value = 1
+            dut.fir_mode.value = MODE_SAMPLE
             dut.spi_cs_n.value = 0
             await RisingEdge(dut.clk)
             cocotb.start_soon(sclk.start(start_high=False))
@@ -538,11 +541,11 @@ async def test_load_coeffs_mid_sample_drive(dut):
             outputs.append(out)
         return outputs
 
-    # load c1 coeffcients
+    # load c1 coefficients
     for idx, c in enumerate(c1):
         out = 0x0000
         c = (c & 0x0FFF) << spi_frame_len - data_width
-        dut.fir_mode.value = 0
+        dut.fir_mode.value = MODE_COEFF
         dut.spi_cs_n.value = 0
         await RisingEdge(dut.clk)
         cocotb.start_soon(sclk.start(start_high=False))
@@ -578,7 +581,7 @@ async def test_load_coeffs_mid_sample_drive(dut):
             for idx, c in enumerate(c2):
                 c2_out = 0x0000
                 c = (c & 0x0FFF) << spi_frame_len - data_width
-                dut.fir_mode.value = 0
+                dut.fir_mode.value = MODE_COEFF
                 dut.spi_cs_n.value = 0
                 await RisingEdge(dut.clk)
                 cocotb.start_soon(sclk.start(start_high=False))
@@ -608,7 +611,7 @@ async def test_load_coeffs_mid_sample_drive(dut):
 
         s = (s & 0x0FFF) << spi_frame_len - data_width
         out = 0x0000
-        dut.fir_mode.value = 1
+        dut.fir_mode.value = MODE_SAMPLE
         dut.spi_cs_n.value = 0
         await RisingEdge(dut.clk)
         cocotb.start_soon(sclk.start(start_high=False))
@@ -724,18 +727,18 @@ async def test_coeff_reload(dut):
     cocotb.log.info(f"first impulse out = {c1_out_impulse_trim}")
 
     for idx, o in enumerate(c1_out_impulse_trim):
-        assert abs(o - coeffs[idx]) <= 5; f"impulse response {o} does not match {coeffs[idx]}"
+        assert abs(o - coeffs[idx]) <= 5, f"impulse response {o} does not match {coeffs[idx]}"
 
-    # load other coeffcients
+    # load other coefficients
     c_other_out = await spi.load_coeff(coeffs_other)
     c_other_impulse = await spi.load_samples(impulse)
     c_other_impulse_trim = c_other_impulse[nop_frames:]
 
     cocotb.log.info(f"expected new reload coeffs = {coeffs_other}")
-    cocotb.log.info(f"reload coeffcients impulse = {c_other_impulse_trim}")
+    cocotb.log.info(f"reload coefficients impulse = {c_other_impulse_trim}")
 
     for idx, o in enumerate(c_other_impulse_trim):
-        assert abs(o - coeffs_other[idx]) <= 5; f"impulse response {o} does not match {coeffs_other[idx]}"
+        assert abs(o - coeffs_other[idx]) <= 5, f"impulse response {o} does not match {coeffs_other[idx]}"
 
 @cocotb.test()
 async def test_overflow(dut):

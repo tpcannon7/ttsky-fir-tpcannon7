@@ -1,12 +1,12 @@
 `default_nettype none
 
 module fir_filter #(
-    parameter Taps = 16
+    parameter Taps = 28
 ) (
     input wire clk,
     input wire rst_n,
     input wire signed [11:0] din,
-    input wire mode,
+    input wire mode, // FIR mode; ModeSample = 1, ModeCoeff = 0
     input wire in_valid,
     input wire out_ready,
 
@@ -23,6 +23,9 @@ module fir_filter #(
   localparam OutputWidth = 12;
   // AccWidth depends on output width from trunc_mult 
   localparam AccWidth = ((SampleWidth + CoeffWidth) - DropBits) + $clog2(Taps);
+
+  localparam ModeSample = 1'b1;
+  localparam ModeCoeff = 1'b0;
 
   assign out_valid = (curr_st == Done);
   assign in_ready  = (curr_st == Ready);
@@ -51,13 +54,13 @@ module fir_filter #(
                 (overflow & acc[AccWidth-1])  ? 12'h800 :
                 output_slice;
 
-  localparam [2:0] Idle = 3'b000, Ready = 3'b010, Compute = 3'b011, Done = 3'b100;
-  reg [2:0] curr_st, next_st;
+  localparam [1:0] Ready = 2'b00, Compute = 2'b01, Done = 2'b10;
+  reg [1:0] curr_st, next_st;
 
   // state machine
   always @(posedge clk or negedge rst_n) begin : reg_curr_state
     if (~rst_n) begin
-      curr_st <= Idle;
+      curr_st <= Ready;
     end else begin
       curr_st <= next_st;
     end
@@ -67,13 +70,10 @@ module fir_filter #(
   always @(*) begin : comb_next_state
     next_st = curr_st;
     case (curr_st)
-      Idle: begin
-        next_st = Ready;
-      end
       Ready: begin
-        if (in_handshake && mode) begin
+        if (in_handshake && mode == ModeSample) begin
           next_st = Compute;
-        end else if (in_handshake && ~mode) begin
+        end else if (in_handshake && mode == ModeCoeff) begin
           next_st = Done;  // coeff loaded, no output to show
         end
       end
@@ -88,7 +88,7 @@ module fir_filter #(
         end
       end
       default: begin
-        next_st = Idle;
+        next_st = Ready;
       end
     endcase
   end
@@ -100,7 +100,7 @@ module fir_filter #(
       for (c_idx = 0; c_idx < Taps; c_idx++) begin
         coeff[c_idx] <= 0;
       end
-    end else if (in_handshake && mode) begin
+    end else if (in_handshake && mode == ModeCoeff) begin
       coeff[0] <= din;
 
       for (c_idx = 1; c_idx < Taps; c_idx++) begin
@@ -116,7 +116,7 @@ module fir_filter #(
       for (s_idx = 0; s_idx < Taps; s_idx++) begin
         samples[s_idx] <= 0;
       end
-    end else if (in_handshake && ~mode) begin
+    end else if (in_handshake && mode == ModeSample) begin
       samples[0] <= din;
 
       for (s_idx = 1; s_idx < Taps; s_idx++) begin

@@ -71,6 +71,7 @@ module spi (
   reg [1:0] curr_st, next_st;
 
   assign spi_rx_valid = (curr_st == Done);
+  // curr_frame_mode latched mid spi frame; only sampled when spi_rx_valid is high
   assign curr_frame_mode = curr_frame_mode_reg;
 
   always @(posedge clk or negedge rst_n) begin
@@ -93,7 +94,7 @@ module spi (
         if (bit_cnt == (SpiFrameWidth)) begin
           next_st = Done;
         end else if (cs_n_rising) begin
-          next_st = Idle;  // erroneous cs_n HIGH during transcation
+          next_st = Idle;  // erroneous cs_n HIGH during transaction
         end
       end
       Done: begin
@@ -109,7 +110,7 @@ module spi (
   reg [$clog2(SpiFrameWidth):0] bit_cnt;
   reg curr_frame_mode_reg;
 
-  assign miso = (~cs_n) ? tx_buf[SpiFrameWidth-1] : 1'bz;
+  assign miso = (curr_st == Busy) ? tx_buf[SpiFrameWidth-1] : 1'bz;
   assign rx_data_out = rx_buf[15:4];
 
   always @(posedge clk or negedge rst_n) begin
@@ -138,7 +139,7 @@ module spi (
   reg tx_fetch_ready;
   // we save a copy of the incoming tx/fir output
   // we keep this copy so that in case we fail a spi transaction
-  // the tx/miso buffer doesnt get overwritten
+  // the tx/miso buffer doesn't get overwritten
   // gives better protection if cs_n is pulled high mid spi transfer
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
@@ -161,8 +162,6 @@ module spi (
       tx_buf <= tx_fetch_ready == 1'b1 ? {tx_data_in, 4'b0000} : tx_safe_buf;
     end
   end
-
-  assign curr_frame_mode = curr_frame_mode_reg;
 
   always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
