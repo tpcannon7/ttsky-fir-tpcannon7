@@ -125,17 +125,6 @@ module fir_filter #(
     end
   end
 
-  // 
-  // always @(posedge clk or negedge rst_n) begin : mac_idx_counter
-  //   if (~rst_n) begin
-  //     mac_idx <= 0;
-  //   end else if (curr_st == Compute && !mac_cnt_full) begin
-  //     mac_idx <= mac_idx + 1'b1;
-  //   end else if (curr_st != Compute) begin
-  //     mac_idx <= 0;
-  //   end
-  // end
-
   reg [$clog2(Taps)-1:0] mac_idx;
   reg mac_busy;
   reg signed [11:0] curr_sample, curr_coeff;

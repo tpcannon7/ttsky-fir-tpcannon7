@@ -11,12 +11,12 @@ import os
 clock_period = 40 # 25mhz
 # spi clock of 1-4mhz requires 2 NOP frames
 # spi clock 5mhz < (not sure bounds) requires 4+ nop frames
-spi_clock_period = 333 # ~3mhz
+spi_clock_period = 250 # ~3mhz
 spi_frame_len = 16
 nop_frames = 2
 
 # params
-taps = 28
+taps = 26
 data_width = 12
 
 # max/min values for bit widths
