@@ -22,6 +22,8 @@ module tt_um_tpcannon7_fir (
   assign uio_oe = 8'b00000100;
   assign uo_out = 8'b00000000;
 
+  localparam Taps = 36;
+
   wire [11:0] spi_tx_data, spi_rx_data;
   wire spi_curr_frame_fir_mode, spi_rx_valid;
   wire control_curr_frame_mode;
@@ -62,7 +64,7 @@ module tt_um_tpcannon7_fir (
   wire control_in_valid, control_out_ready;
 
   fir_filter #(
-      .Taps(28)
+      .Taps(Taps)
   ) fir (
       .clk(clk),
       .rst_n(rst_n),
