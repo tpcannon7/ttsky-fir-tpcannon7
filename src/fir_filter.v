@@ -1,7 +1,7 @@
 `default_nettype none
 
 module fir_filter #(
-    parameter Taps = 28
+    parameter Taps = 36
 ) (
     input wire clk,
     input wire rst_n,

@@ -1,37 +1,77 @@
 # Changelog
 
-## Uncommitted (2026-07-16)
+## Uncommitted
 
-### Fixes
-- **Impulse response plot**: Moved from `test_negative_impulse_response` (negative impulse,
-  output ≈ -coeffs) into the positive impulse test, fixing spurious `-2*coeffs` errors
-  in the plot (up to -468 LSB at mid taps)
-- **Step response assertion**: Replaced `abs(out[-1] - expected) <= 30` with per-sample
-  `abs(out[i] - y_lfilter_int[i]) <= 30`, catching the overflow at sample 48
-- **cs_n assert mid frame assertion**: Fixed `abs(abs())` → signed comparison
+- `README.md`: Added sampling rate line (~294 kSps @ SCLK = 5 MHz)
+- `docs/info.md`: Added CS_N high-time section; updated sampling rate calculation
+- `docs/CHANGELOG.md`, `TODO.md`: Updated for current repo state
+
+## 2026-07-19 — f6b01fb
+
+- **Tap count 28→36**: `src/tt_um_tpcannon7_fir.v` `localparam Taps = 36`,
+  `src/fir_filter.v` default `parameter Taps = 36`, `test/fir_tb.py` `taps = 36`
+- **System clock 25→40 MHz**: `src/config.json` `CLOCK_PERIOD` 40→25 ns,
+  `info.yaml` `clock_hz` 25M→40M
+- **Docs**: `README.md`, `info.yaml`, `docs/info.md` — all tap count and clock
+  references updated; added sampling rate (~294 kSps, ~147 KHz Nyquist) and
+  CS_N high-time section to `docs/info.md`
+- **Plots**: All 4 response plots regenerated (freq, impulse, step, noisy sine)
+- **Changelog**: Recorded 36-tap / 40-MHz transition
+
+## 2026-07-16..2026-07-19 — Overflow fix, test refactor, SPI cleanup, MAC pipeline
 
 ### Hardware
-- **fir_filter.v mac_idx counter**: Gated increment with `!mac_cnt_full` to prevent
-  out-of-bounds read of `samples[28]`/`coeff[28]` (X in waveform)
 - **fir_filter.v output saturation**: Replaced raw bit-slice `acc[14:3]` with guard-bit
   overflow detection/clamping to ±2047. Previously the step response wrapped to -2048
-  during transient when accumulator exceeded 12-bit signed range
+  during transient when accumulator exceeded 12-bit signed range (`03faaf1`)
+- **fir_filter.v mac_idx counter**: Gated increment with `!mac_cnt_full` to prevent
+  out-of-bounds read of `samples[28]`/`coeff[28]` (X in waveform) (`2ff79c3`)
+- **MAC pipeline**: Added 2-cycle/tap pipelined MAC (load operands on cycle N,
+  accumulate on cycle N+1), decoupling tap-select mux + multiplier from accumulator
+  adder to close timing (`2ff79c3`)
+- **MODE → FIR_MODE**: Renamed mode pin for clarity across fir_filter, control, spi
+  (`53661a4`)
+- **Config sweeps**: Density 70% → 72% → 65%, hold margins 0.1→0.05, tap count
+  28→26→28 across multiple commits (`25945bc`, `20944c6`, `083c4d0`, `3f246a9`)
+
+### Testbench
+- **New overflow test** (`test_overflow`): monotonicity + final saturation check
+  (`a51d6c4`)
+- **SPIinterface refactor**: Broke monolithic transmit into `_transmit`, `transfer`,
+  `transfer_bad` (fault injection) methods (`53661a4`)
+- **Bad-transaction tests**: `transfer_bad` injects random CS_N high mid-frame to
+  verify SPI fault recovery (`53661a4`)
+- **Coefficient reload test**: Load coeffs, verify impulse, reload different coeffs,
+  verify (`a51d6c4`)
+- **Seeded RNG**: `FIR_TB_SEED` env var for reproducible test runs (`53661a4`)
+- **Mid-sample coefficient reload**: Manual SPI frame construction for exploratory
+  test (`a51d6c4`)
+- Plot-only tests (`test_frequency_response`, `test_load_coeffs_mid_sample_drive`)
+  with try/except around `plt.savefig()` (`03faaf1`, `a51d6c4`)
+- Deleted dead test files `test/spi_tb.py` and `test/test.py` (`03faaf1`)
+- Added `plots` target to `test/Makefile` (`03faaf1`)
+- All 10 tests pass, all 4 plots regenerated across multiple commits
+
+### SPI
+- **MISO idle-low**: MISO actively driven LOW during idle instead of tri-stated
+  (`53661a4`)
+- **negedge sensitivity**: SPI module shifts `tx_buf` on `posedge clk`, fixing
+  edge-alignment issues (`53661a4`)
+- **cs_n mid-frame fault**: SPI resets on premature CS_N de-assertion, discarding
+  partial frame (`53661a4`)
 
 ### Code quality
-- Deleted dead test files `test/spi_tb.py`, `test/test.py`
-- Removed stale Baugh-Wooley comments from `src/trunc_mult.v`
-- Added try/except around `plt.savefig()` in all plot tests
-
-### Tests
-- Refactored `SPIinterface` into `_transmit`, `transfer`, `transfer_bad` methods
-- Added `plots` target to `test/Makefile` (outputs to `docs/`)
-- All 10 tests pass, plots regenerated
+- Removed stale Baugh-Wooley comments from `src/trunc_mult.v` (`03faaf1`)
+- Cleaned up synthesis warnings across control, fir_filter, spi (`53661a4`)
+- Deleted `test/tb.gtkw` (stale absolute paths) (`53661a4`)
 
 ### Documentation
-- `docs/info.md`: SPI timing diagram, RP2040 C bringup snippet, NOP frame explanation,
-  quantization error note, coefficient reverse-loading order, Frequency Response section,
-  Noisy Sine section
-- `README.md`: Added "Results" section with plot thumbnails/captions
+- `docs/info.md`: Complete rewrite — SPI timing diagram, RP2040 C bringup snippet,
+  NOP frame explanation, quantization error note, coefficient reverse-loading order,
+  Frequency Response section, Noisy Sine section (`03faaf1`, `53661a4`, `a51d6c4`)
+- `README.md`: Added "Results" section with plot thumbnails/captions (`03faaf1`)
+- `CHANGELOG.md`: Brought up to date with full project history (`03faaf1`)
+- Spelling and mode naming consistency pass (`5b897de`)
 
 ---
 

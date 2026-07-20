@@ -27,16 +27,18 @@ You can also include images in this folder and reference them in the markdown. E
 ### Coefficient Reloading
  - Coefficients are runtime programmable through the use of the FIR_MODE pin with some additional notes
    - On fresh startup of filter, best practice is to load your coefficients for all taps and then continuously stream samples
-   - If a coefficient reload is desired to change filter behavior during runtime, the recommended setup is to flush the entire sample line with 0x0000/NOPs equal to tap count (28 taps) to not corrupt the filter math with stale samples and then load new coefficients
+   - If a coefficient reload is desired to change filter behavior during runtime, the recommended setup is to flush the entire sample line with 0x0000/NOPs equal to tap count (36 taps) to not corrupt the filter math with stale samples and then load new coefficients
    - Outputs during this NOP/reloading phase should be ignored; they are stale calculations from the previous filter settings
 
 ## SPI Overview
 
-  - System clock is 25 MHz, recommended SCLK $\leq$ ~3-4MHz
+  - System clock is 40 MHz, recommended SCLK $\leq$ ~4-5 MHz
   - 16 bit frames; MSB leading, remaining lower bits padded with 0's
-    - With 16 bit frames 
+    - With 16 bit frames @ SCLK = 5 MHz, the sampling rate is about:
+        - Total SPI frame time = 200ns per bit * 16 bits + cs_n high between frames = 3400ns -> 294 kSps / 2 (Nyquist) = 147 KHz maxiumum theoretical recoverable signal frequency; real-world maximum will land slightly below
   - SPI Mode 0 only
   - MISO is driven LOW during idle, not tri-stated; do not share MISO line with other SPI slaves unless externally isolated or muxed
+  - CS_N high time between frames must be one cycle of SCLK, (For 5 MHz, CS_N high between frames should be 200ns)
   - Set `ui_in[0]` pin (FIR_MODE) at the beginning of each SPI transaction to your desired transmission type
     - FIR_MODE = 1 (SAMPLE)
     - FIR_MODE = 0 (COEFFICIENT)
@@ -132,7 +134,7 @@ The DUT output (red) overlaid on the ideal fixed-point coefficients (blue).
 
 ![Step Response](step_response.png)
 
-The DUT step response (red) vs Python lfilter (blue). The FIR fills in over 28 taps and then converges to the expected steady state step response.
+The DUT step response (red) vs Python lfilter (blue). The FIR fills in over 36 taps and then converges to the expected steady state step response.
 
 ## Frequency Response
 

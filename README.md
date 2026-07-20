@@ -2,10 +2,11 @@
 
 ## D-FIR: A Tiny Tapeout FIR Filter
 
-  - 12 bit samples/coefficients, 28 Taps
+  - 12 bit samples/coefficients, 36 Taps
   - Runtime coefficient reprogramming
   - SPI Interface (Mode 0)
-  - Internal clock @ 25 MHz
+  - Internal clock @ 40 MHz
+    - ~294 kSps @ SCLK = 5 MHz
   - SKY130 PDK
   - **See [info.md](docs/info.md) for more information**
     - [General Operation](docs/info.md#general-operation)
