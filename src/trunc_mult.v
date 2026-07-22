@@ -2,7 +2,7 @@
 
 module trunc_mult #(
     parameter DataWidth = 12,
-    parameter DropBits  = 11   // this is our dropped LSP bits
+    parameter DropBits  = 8    // this is our dropped LSP bits
 ) (
     input wire signed [DataWidth-1:0] a,
     input wire signed [DataWidth-1:0] b,
@@ -14,6 +14,10 @@ module trunc_mult #(
   localparam OutputSlice = (DataWidth * 2) - DropBits;
   localparam Columns = OutputWidth - DropBits;
   localparam H = DataWidth - DropBits;
+
+  localparam EdgeICWidth = 3;
+  localparam MiddleICTermAmt = DataWidth - H - 4;
+  localparam MiddleICWidth = (MiddleICTermAmt <= 0) ? 1 : $clog2(MiddleICTermAmt + 1);
 
   // each partial product is one bit in array per column
   reg [DataWidth-1:0] partial_products[0:Columns-1];
@@ -61,14 +65,19 @@ module trunc_mult #(
 
       // sum across all bits per partial product array
       for (bit_idx = 0; bit_idx < DataWidth; bit_idx++) begin
-        sum_products[col_idx-DropBits] = sum_products[col_idx-DropBits] + partial_products[col_idx-DropBits][bit_idx];
+        sum_products[col_idx-DropBits] = sum_products[col_idx-DropBits] +
+            {{($clog2(DataWidth) - 1) {1'b0}}, partial_products[col_idx-DropBits][bit_idx]};
       end
 
       // extra terms from baugh-wooley
       if (col_idx == OutputWidth - 2) begin
-        sum_products[col_idx-DropBits] = sum_products[col_idx-DropBits] + (~a[DataWidth-1]) + (~b[DataWidth-1]);
+        sum_products[col_idx-DropBits] = sum_products[col_idx-DropBits] +
+            {{($clog2(DataWidth) - 1) {1'b0}}, (~a[DataWidth-1])} +
+            {{($clog2(DataWidth) - 1) {1'b0}}, (~b[DataWidth-1])};
       end else if (col_idx == DataWidth - 1) begin
-        sum_products[col_idx-DropBits] = sum_products[col_idx-DropBits] + a[DataWidth-1] + b[DataWidth-1];
+        sum_products[col_idx-DropBits] = sum_products[col_idx-DropBits] +
+            {{($clog2(DataWidth) - 1) {1'b0}}, a[DataWidth-1]} +
+            {{($clog2(DataWidth) - 1) {1'b0}}, b[DataWidth-1]};
       end
 
     end
@@ -94,16 +103,16 @@ module trunc_mult #(
   // subtract all by 1 to use base 0 indexing
   // middle ic values are 11 bit values max value of 11 (1+1+1+1...+1=11), needs 4 bits to hold max possible
   // "Low error Truncated Multipliers for DSP applications" Garafolo et al.
-  reg [2:0] edge_ic;
-  reg [3:0] middle_ic;
+  reg [  EdgeICWidth-1:0] edge_ic;
+  reg [MiddleICWidth-1:0] middle_ic;
   always @(*) begin : comb_middle_edge_error_ic_terms
     edge_ic   = 0;
     middle_ic = 0;
     for (bit_idx = 0; bit_idx < DataWidth - H; bit_idx++) begin
       if (bit_idx == 0 || bit_idx == 1 || bit_idx == DataWidth - H - 2 || bit_idx == DataWidth - H - 1) begin
-        edge_ic = edge_ic + ic_column[bit_idx];
+        edge_ic = edge_ic + {{{(EdgeICWidth - 1) {1'b0}}, ic_column[bit_idx]}};
       end else begin
-        middle_ic = middle_ic + ic_column[bit_idx];
+        middle_ic = middle_ic + {{(MiddleICWidth - 1) {1'b0}}, ic_column[bit_idx]};
       end
     end
   end
@@ -115,14 +124,19 @@ module trunc_mult #(
     for (product_idx = DropBits; product_idx < OutputWidth; product_idx++) begin
       // "1" term added in the final bit column sum
       if (product_idx == OutputWidth - 1) begin
-        accumulate = accumulate + ((sum_products[product_idx-DropBits] + 1'b1) << (product_idx - DropBits + 1));
+        accumulate = accumulate +
+            (({{{OutputWidth - DropBits - $clog2(DataWidth)} {1'b0}},
+               sum_products[product_idx-DropBits]} + 1'b1) << (product_idx - DropBits + 1));
       end else begin
-        accumulate = accumulate + (sum_products[product_idx-DropBits] << (product_idx - DropBits + 1));
+        accumulate = accumulate +
+            ({{{OutputWidth - DropBits - $clog2(DataWidth)} {1'b0}},
+              sum_products[product_idx-DropBits]} << (product_idx - DropBits + 1));
       end
     end
     // these shifts values are derived from:
     // "Low error Truncated Multipliers for DSP applications" Garafolo et al.
-    accumulate = accumulate + (edge_ic) + (middle_ic << 1);
+    accumulate = accumulate + {{(OutputSlice + 1 - EdgeICWidth){1'b0}},   edge_ic} +
+                          ({{{(OutputSlice + 1 - MiddleICWidth){1'b0}}, middle_ic}} << 1);
   end
 
   assign out = accumulate[OutputSlice:1];

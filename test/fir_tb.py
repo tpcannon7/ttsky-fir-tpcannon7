@@ -131,7 +131,7 @@ class SPIinterface:
             for bit_idx in range(spi_frame_len):
                 if cs_high_flag and bit_idx == cs_high_bit:
                     label = "coeff" if mode == 0 else "samples"
-                    cocotb.log.info(f"CS_N HIGH @ bit {bit_idx} of {label} {idx} = {data[idx]}")
+                    # cocotb.log.info(f"CS_N HIGH @ bit {bit_idx} of {label} {idx} = {data[idx]}")
                     self.dut.spi_cs_n.value = 1
                     self.sclk.stop()
                     await Timer(self.spi_clock_period, "ns")

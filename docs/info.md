@@ -18,6 +18,7 @@ You can also include images in this folder and reference them in the markdown. E
     - Coefficients must be loaded in **reverse order** (last tap first) due to the coefficient shift register architecture
     - There is an expected amount of error due to the fixed point representation and truncated multiplier precision
         - Truncated multiplier accumulates error across taps due to serial MAC architecture (one multiplier is used across all taps)
+        - See [Area–Error Tradeoff](#areaerror-tradeoff) for a quantified analysis with Sky130A synthesis data
     - **Recommended first test:**
         - Generate own array of filter coefficients using Python or other online tools (ex. Python scipy firwin function)
         - Load coefficients over SPI
@@ -97,16 +98,16 @@ MISO  X  d15  d14  d13  d12  d11  d10  d9   d8   d7   d6   d5   d4   d3   d2   d
 - **Baugh-Wooley Algorithm** ("A Two's Complement Parallel Array Multiplication Algorithm" Baugh and Wooley)
     - An issue with the truncation method is that it does not natively handle signed (2's complement) multiplication
     - This is fixed by using the Baugh-Wooley algorithm which inverts certain terms in partial products along with the addition of new terms in partial product columns
-        - Every y and x term less than (y~i~ < y~m-1~) and (x~i~ < x~n-1~) is inverted in their respective partial product pairs
-        - Special case for y~i~ = y~m-1~ and x~i~ = x~n-1~ where this partial product pair is left unchanged (no inversion)
+        - Every y and x term less than ($y_i$ < $y_{m-1}$) and ($x_i$ < $x_{n-1}$) is inverted in their respective partial product pairs
+        - Special case for $y_i$ = $y_{m-1}$ and $x_i$ = $x_{n-1}$ where this partial product pair is left unchanged (no inversion)
         - Extra terms added
-            - Inverted single terms of y~m-1~ and x~n-1~ are added to the OutputWidth - 2 (12x12 = 24 bit -> Column/bit 22) partial product column 
+            - Inverted single terms of $y_{m-1}$ and $x_{n-1}$ are added to the OutputWidth - 2 (12x12 = 24 bit -> Column/bit 22) partial product column 
             - Single bit "1" added to the final partial product column, OutputWidth - 1 (Column/bit 23)
-            - Two single y~m-1~ and x~n-1~ terms are added at P~m-1~ and P~n-1~ respectively, special case when m = n (both operands are equal bit width) where terms are added to the same partial product column
+            - Two single $y_{m-1}$ and $x_{n-1}$ terms are added at $P_{m-1}$ and $P_{n-1}$ respectively, special case when m = n (both operands are equal bit width) where terms are added to the same partial product column
 - **IC Error Correction** ("Low Error Truncated Multipliers for DSP Applications" Garofolo et al.)
     - Truncation involves some intrinsic error due to lost partial product terms and carry out from dropped partial product columns
     - We can recover some accuracy by implementing an error correction scheme
-    - Since we drop the bottom 8 bits/columns ([7:0]), and our bit width for our inputs equals to 12, we compute our "h" term to be input bit width - dropped bits = 4.
+    - Since we drop the bottom 8 bits/columns, and our bit width for our inputs equals to 12, we compute our "h" term to be input bit width - dropped bits = 4.
         - "h" represents the number of extra bits kept beyond the minimum necessary of n = 12 bits (matching our input bit width)
     - In order to implement the error compensation, we must calculate the partial products in the one column below our first non-dropped column
         - In our case, drop bits = 8, in our truncated multiplier we compute partial products for columns [23:8]. We must now compute one column lower at column 7 (8 - 1 = column 7)
@@ -124,11 +125,43 @@ MISO  X  d15  d14  d13  d12  d11  d10  d9   d8   d7   d6   d5   d4   d3   d2   d
         - The middle IC terms align to bit 8, so since we add that lower bit to account for the edge IC addition we shift left by 1 to align the middle IC terms with the correct bit and add normally
         - *Note: this extra bit alters the original truncated multiplier shifting in the accumulate stage; we must shift one extra bit each time to account for the extra guard bit added for the IC term alignment to preserve prior weighting for each column*
 
+
+
+### Area–Error Tradeoff
+
+![Truncated Multiplier Tradeoff](trunc_mult_tradeoff.png)
+
+The truncated multiplier was synthesized across all DropBits values (0–11) against the Sky130A HD standard cell library. The plot shows max and mean absolute error vs cell count and chip area.
+
+| DropBits | Max \|error\| (full LSB) | Cells | Area (µm²) |
+|----------|---------------------------|-------|------------|
+| 0 | ≤2 | 657 | 5241 |
+| 4 | ≤32 | 634 | 4937 |
+| 8 | ≤512 | 522 | 4150 |
+| 11 | ≤4096 | 398 | 3133 |
+
+**Design point: DropBits = 8** (vertical dashed line). At this level:
+- Error bound: ≤±2 truncated-output LSBs (≤512 full-precision LSBs)
+- ~27% cell savings vs a raw `*` operator synthesized through the same flow (717 cells baseline)
+- FIR output visually indistinguishable from the ideal floating-point reference (see [Noisy Sinusoid Filtering](#noisy-sinusoid-filtering))
+
+
+
+# GDS 2D Preview
+
+![GDS 2D Preview](https://tpcannon7.github.io/ttsky-fir-tpcannon7/gds_render.png)
+
+## Noisy Sinusoid Filtering
+
+![Noisy Sine Filtering](noisy_sine_comparison.png)
+
+A 2kHz sinusoid with added Gaussian noise filtered by the DUT with low-pass coefficients (10KHz) vs the Python lfilter model.
+
 ## Impulse Response
 
 ![Impulse Response](impulse_response.png)
 
-The DUT output (red) overlaid on the ideal fixed-point coefficients (blue).
+The DUT output (red) overlaid on the ideal fixed-point coefficients (blue). Generated with 10KHz low pass coeffcients.
 
 ## Step Response
 
@@ -141,9 +174,3 @@ The DUT step response (red) vs Python lfilter (blue). The FIR fills in over 36 t
 ![Frequency Response](freq_response.png)
 
 The frequency response of the 12-bit fixed-point model (Q12.0 samples, Q1.11 coefficients) vs the Python ideal model (floating-point). Frequency response generated with 50-60KHz band-pass coefficients.
-
-## Noisy Sine Filtering
-
-![Noisy Sine Filtering](noisy_sine_comparison.png)
-
-A 2kHz sinusoid with added Gaussian noise filtered by the DUT with low-pass coefficients (10KHz) vs the Python lfilter model.

@@ -40,22 +40,30 @@
 
 ![GDS 2D Preview](https://tpcannon7.github.io/ttsky-fir-tpcannon7/gds_render.png)
 
+## Noisy Sinusoid Filtering Comparison
+
+![Noisy Sine Filtering](docs/noisy_sine_comparison.png)
+
+*2KHz sinusoid with added Gaussian noise, filtered with 10KHz low pass coefficients*
+
 ## Impulse Response
 
 ![Impulse Response](docs/impulse_response.png)
+
+*10 KHz low pass filter impulse response*
 
 ## Step Response
 
 ![Step Response](docs/step_response.png)
 
-## Noisy Sinusoid Filtering Comparison
-
-![Noisy Sine Filtering](docs/noisy_sine_comparison.png)
-
-- 2KHz sinusoid with added Gaussian noise, filtered with 10KHz low pass coefficients
-
 ## Frequency Response
 
 ![Frequency Response](docs/freq_response.png)
 
-- 50-60KHz band-pass
+*50-60KHz band-pass frequency response*
+
+## Truncated Multiplier Area–Error Tradeoff
+
+![Truncated Multiplier Tradeoff](docs/trunc_mult_tradeoff.png)
+
+The 12×12 truncated multiplier (Baugh-Wooley signed, with Garofalo IC error correction) was synthesized against the Sky130A HD standard cell library across all DropBits parameters. The dashed line at DropBits=8 marks the design point used in the FIR filter.
