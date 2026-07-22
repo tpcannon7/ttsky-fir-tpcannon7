@@ -18,7 +18,7 @@ You can also include images in this folder and reference them in the markdown. E
     - Coefficients must be loaded in **reverse order** (last tap first) due to the coefficient shift register architecture
     - There is an expected amount of error due to the fixed point representation and truncated multiplier precision
         - Truncated multiplier accumulates error across taps due to serial MAC architecture (one multiplier is used across all taps)
-        - See [Area–Error Tradeoff](#areaerror-tradeoff) for a quantified analysis with Sky130A synthesis data
+        - See the Area–Error Tradeoff section below for a quantified analysis with Sky130A synthesis data
     - **Recommended first test:**
         - Generate own array of filter coefficients using Python or other online tools (ex. Python scipy firwin function)
         - Load coefficients over SPI
@@ -144,7 +144,7 @@ The truncated multiplier was synthesized across all DropBits values (0–11) aga
 **Design point: DropBits = 8** (vertical dashed line). At this level:
 - Error bound: ≤±2 truncated-output LSBs (≤512 full-precision LSBs)
 - ~27% cell savings vs a raw `*` operator synthesized through the same flow (717 cells baseline)
-- FIR output visually indistinguishable from the ideal floating-point reference (see [Noisy Sinusoid Filtering](#noisy-sinusoid-filtering))
+- FIR output visually indistinguishable from the ideal floating-point reference (see Noisy Sinusoid Filtering below)
 
 
 
