@@ -2,6 +2,11 @@
 
 ## Uncommitted
 
+- `test/fir_tb.py`: Refactored `test_load_coeffs_mid_sample_drive` — replaced ~140 lines of inline SPI bit-banging with `SPIinterface` calls, added assertions verifying both c1 and c2 impulse responses
+- `test/fir_tb.py`: Gated `test_frequency_response` and `test_load_coeffs_mid_sample_drive` behind `@cocotb.test(skip=os.getenv("FIR_TB_PLOTS") is None)` — default `make -B` skips them
+- `test/Makefile`: `plots` target now passes `FIR_TB_PLOTS=1`, uses `mv -f`
+- `docs/info.md`: Added MISO CS_N-to-SCLK hold time (2 core cycles / 50 ns)
+- `src/trunc_mult.v`: Added IC column Baugh-Wooley constraint comment
 - `README.md`: Added sampling rate line (~294 kSps @ SCLK = 5 MHz)
 - `docs/info.md`: Added CS_N high-time section; updated sampling rate calculation
 - `docs/CHANGELOG.md`, `TODO.md`: Updated for current repo state
@@ -79,7 +84,7 @@
 
 - Updated some docs + new tests
 
-- Added `spi.v` MISO ~~tristate~~ (MISO is driven LOW during idle) control, mid-frame cs_n fault injection tests
+- Added `spi.v` MISO idle-low handling (MISO is driven LOW during idle, not tri-stated), mid-frame cs_n fault injection tests
 - Full test suite: impulse, negative impulse, step, noisy sine, switching inputs,
   frequency response, non-symmetric coeffs, mid-sample coeff reload,
   cs_n mid-frame fault, coeff reload

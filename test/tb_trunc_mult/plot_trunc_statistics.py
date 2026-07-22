@@ -81,16 +81,13 @@ def generate_plots(max_abs_error, mean_abs_error, yosys_stats):
 
     plt.tight_layout()
     fig.savefig(os.path.join(DOCS_DIR, "trunc_mult_tradeoff.png"))
+    plt.close()
 
-
-    
 
 def main():
     max_abs_error, mean_abs_error =  parse_trunc_error_csv()
     yosys_stats = parse_yosys_stats()
     generate_plots(max_abs_error, mean_abs_error, yosys_stats)
-
-
 
 if __name__ == "__main__":
     main()

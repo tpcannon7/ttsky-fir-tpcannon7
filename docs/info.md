@@ -36,10 +36,11 @@ You can also include images in this folder and reference them in the markdown. E
   - System clock is 40 MHz, recommended SCLK $\leq$ ~4-5 MHz
   - 16 bit frames; MSB leading, remaining lower bits padded with 0's
     - With 16 bit frames @ SCLK = 5 MHz, the sampling rate is about:
-        - Total SPI frame time = 200ns per bit * 16 bits + cs_n high between frames = 3400ns -> 294 kSps / 2 (Nyquist) = 147 KHz maxiumum theoretical recoverable signal frequency; real-world maximum will land slightly below
+        - Total SPI frame time = 200ns per bit * 16 bits + cs_n high between frames = 3400ns -> 294 kSps / 2 (Nyquist) = 147 KHz maximum theoretical recoverable signal frequency; real-world maximum will land slightly below
   - SPI Mode 0 only
   - MISO is driven LOW during idle, not tri-stated; do not share MISO line with other SPI slaves unless externally isolated or muxed
   - CS_N high time between frames must be one cycle of SCLK, (For 5 MHz, CS_N high between frames should be 200ns)
+  - MISO is valid 2 core clock cycles after CS_N falls (3-stage synchronizer + edge detection). At 40 MHz this is 50 ns. The SPI master must not start SCLK sooner than this after asserting CS_N low, or the first MISO bit may be stale.
   - Set `ui_in[0]` pin (FIR_MODE) at the beginning of each SPI transaction to your desired transmission type
     - FIR_MODE = 1 (SAMPLE)
     - FIR_MODE = 0 (COEFFICIENT)
@@ -81,20 +82,20 @@ MISO  X  d15  d14  d13  d12  d11  d10  d9   d8   d7   d6   d5   d4   d3   d2   d
 - Uses the Baugh-Wooley algorithm to handle signed multiplication
     - "A Two's Complement Parallel Array Multiplication Algorithm" Baugh and Wooley
 - Uses error correction scheme with IC terms to handle error stemming from truncation
-    - "Low Error Truncated Multipliers for DSP Applications" Garofolo et al.
+    - "Low Error Truncated Multipliers for DSP Applications" Garofalo et al.
     - Optimized for lowest mean square error along with area
 
 ### Overview
 - **Truncated multiplier to minimize area**
     - We use truncation specifically due to the fixed point of the coefficient terms in the FIR filter math
-    - In standard binary multiplication, we would compute all 32 product columns and their partial products stemming from the 16x16 multiplication
-    - The idea behind the truncated multiplier is that because our coefficients are represented in Q1.11 (11 fractional bits), we can drop a number of the fractional bits and maintain a good level a precision while netting hardware area
+    - In standard binary multiplication, we would compute all 24 product columns and their partial products stemming from the 12x12 multiplication
+    - The idea behind the truncated multiplier is that because our coefficients are represented in Q1.11 (11 fractional bits), we can drop a number of the fractional bits and maintain a good level of precision while saving hardware area
     - In our case, we drop 8 of the 11 fractional bits. This means that in our multiplication of 12x12 bit numbers, we never compute the lower 8 partial product columns, saving area that would be spent on adders, AND gates, etc.
 - **Partial Product Calculation**
     - This section will give an overview to the general steps taken to perform binary multiplication in our case
     - We first create a bit vector of all partial products per column, largest possible width is 12 partial products in a column in our case (width of multiplicand). Each bit position in this vector will store one partial product which is the result of an AND operation between two of the multiplier operand bits ($a_i$ & $b_j$ = $pp_{ij}$)
     - With bit vectors for each partial product column computed, we go down the column and sum them how you would in normal multiplication; ex. partial product column 2 may have a result that is [1,0,1] = sum across that vector and the final result is binary 010 (2 in decimal). 
-    - Finally, we accumulate across each summed product columns into a final result accumulator vector, **making sure to account for the weight of each column** (ex. we shift left 16 bits for partial product column 16 to align with the correct bit position and preserve weighting)
+    - Finally, we accumulate across each summed product columns into a final result accumulator vector, **making sure to account for the weight of each column** (ex. we shift left 12 bits for partial product column 12 to align with the correct bit position and preserve weighting)
 - **Baugh-Wooley Algorithm** ("A Two's Complement Parallel Array Multiplication Algorithm" Baugh and Wooley)
     - An issue with the truncation method is that it does not natively handle signed (2's complement) multiplication
     - This is fixed by using the Baugh-Wooley algorithm which inverts certain terms in partial products along with the addition of new terms in partial product columns
@@ -104,7 +105,7 @@ MISO  X  d15  d14  d13  d12  d11  d10  d9   d8   d7   d6   d5   d4   d3   d2   d
             - Inverted single terms of $y_{m-1}$ and $x_{n-1}$ are added to the OutputWidth - 2 (12x12 = 24 bit -> Column/bit 22) partial product column 
             - Single bit "1" added to the final partial product column, OutputWidth - 1 (Column/bit 23)
             - Two single $y_{m-1}$ and $x_{n-1}$ terms are added at $P_{m-1}$ and $P_{n-1}$ respectively, special case when m = n (both operands are equal bit width) where terms are added to the same partial product column
-- **IC Error Correction** ("Low Error Truncated Multipliers for DSP Applications" Garofolo et al.)
+- **IC Error Correction** ("Low Error Truncated Multipliers for DSP Applications" Garofalo et al.)
     - Truncation involves some intrinsic error due to lost partial product terms and carry out from dropped partial product columns
     - We can recover some accuracy by implementing an error correction scheme
     - Since we drop the bottom 8 bits/columns, and our bit width for our inputs equals to 12, we compute our "h" term to be input bit width - dropped bits = 4.
@@ -115,9 +116,9 @@ MISO  X  d15  d14  d13  d12  d11  d10  d9   d8   d7   d6   d5   d4   d3   d2   d
         - For partial products i = 1, 2, n-h-1 (12 - 4 - 1 = 7), n-h (12 - 4 = 8) we will sum them together and shift them all by $2^{-n-h-1}$ where -n-h-1 = -12-4-1 = -17
             - *These are our "edge IC terms"*
         - For partial products 2 < i < n-h-1 (12 - 4 - 1 = 7), we apply the shift of $2^{-n-h}$ or $2*2^{-n-h-1}$ (-n-h = -12-4 = -16 -> $2^{-16}$) to them, with our K term coming to be 0
-            - *"These are our "middle IC terms"*
+            - *These are our "middle IC terms"*
         - The term shift can be confusing in this context especially with using negative power of 2 terms
-            - The paper uses reverse style for MSB and LSB where the MSB (or most significant product) is at $2^-1$ place and the LSB (least significant product) is at the $2^-{2n}$ place
+            - The paper uses reverse style for MSB and LSB where the MSB (or most significant product) is at $2^{-1}$ place and the LSB (least significant product) is at the $2^{-2n}$ place
             - Since our output with 12x12 multiplication is 24 bits and we truncate the bottom 8 bits for our output, we must align these at 17 and 16 bits from the left respectively
             - This comes out to 24 - 17 = 7 and 24 - 16 = 8. These fit into partial product column 7 and 8 respectively
         - We must align the edge IC sum partial products and the middle IC sum partial products to their respective bit positions and add them to the main accumulation term
@@ -127,7 +128,7 @@ MISO  X  d15  d14  d13  d12  d11  d10  d9   d8   d7   d6   d5   d4   d3   d2   d
 
 
 
-### Area–Error Tradeoff {#areaerror-tradeoff}
+### Area–Error Tradeoff
 
 ![Truncated Multiplier Tradeoff](trunc_mult_tradeoff.png)
 
@@ -147,25 +148,25 @@ The truncated multiplier was synthesized across all DropBits values (0–11) aga
 
 
 
-## Noisy Sinusoid Filtering {#noisy-sinusoid-filtering}
+## Noisy Sinusoid Filtering
 
 ![Noisy Sine Filtering](noisy_sine_comparison.png)
 
 A 2kHz sinusoid with added Gaussian noise filtered by the DUT with low-pass coefficients (10KHz) vs the Python lfilter model.
 
-## Impulse Response {#impulse-response}
+## Impulse Response
 
 ![Impulse Response](impulse_response.png)
 
-The DUT output (red) overlaid on the ideal fixed-point coefficients (blue). Generated with 10KHz low pass coeffcients.
+The DUT output (red) overlaid on the ideal fixed-point coefficients (blue). Generated with 10KHz low pass coefficients.
 
-## Step Response {#step-response}
+## Step Response
 
 ![Step Response](step_response.png)
 
 The DUT step response (red) vs Python lfilter (blue). The FIR fills in over 36 taps and then converges to the expected steady state step response.
 
-## Frequency Response {#frequency-response}
+## Frequency Response
 
 ![Frequency Response](freq_response.png)
 

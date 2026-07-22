@@ -39,7 +39,7 @@ module control (
       curr_frame_fir_mode <= 1'b0;
     end else if (spi_rx_valid) begin
       spi_in_buf <= spi_rx_data;
-      rx_valid_reg <= spi_rx_valid;
+      rx_valid_reg <= 1'b1;
       curr_frame_fir_mode <= spi_curr_frame_fir_mode;
     end else if (fir_control_in_handshake) begin
       rx_valid_reg <= 1'b0;
@@ -57,3 +57,5 @@ module control (
   end
 
 endmodule
+
+`default_nettype wire

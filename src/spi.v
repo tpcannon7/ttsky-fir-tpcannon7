@@ -21,11 +21,7 @@ module spi (
 
   localparam SpiFrameWidth = 16;
 
-  wire sclk_rising;
-  /* verilator lint_off UNUSEDSIGNAL */
-  wire cs_n_rising;
-  /* verilator lint_on UNUSEDSIGNAL */
-  wire sclk_falling, cs_n_falling;
+  wire sclk_rising, cs_n_rising, sclk_falling, cs_n_falling;
 
   assign sclk_rising  = (sclk_sync[1] == 1'b1) && (sclk_sync[2] == 1'b0);
   assign sclk_falling = (sclk_sync[1] == 1'b0) && (sclk_sync[2] == 1'b1);
@@ -171,5 +167,6 @@ module spi (
     end
   end
 
-
 endmodule
+
+`default_nettype wire

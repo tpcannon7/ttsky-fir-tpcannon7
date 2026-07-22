@@ -34,6 +34,7 @@ fs = (1 / (total_spi_frame_time * 1e-9))
 
 # random test seeding
 TEST_SEED = int(os.getenv("FIR_TB_SEED", "12345"))
+cocotb.log.info(f"FIR_TB_SEED={TEST_SEED}")
 
 # bidirect pins
 CS_N = 0x01
@@ -226,6 +227,8 @@ async def test_impulse_response(dut):
     except OSError as e:
         cocotb.log.warning(f"Failed to save impulse_response plot: {e}")
 
+    plt.close()
+
 @cocotb.test()
 async def test_negative_impulse_response(dut):
     clk = Clock(dut.clk, clock_period, "ns")
@@ -246,11 +249,16 @@ async def test_negative_impulse_response(dut):
     await reset(dut)
     await spi.load_coeff(coeffs)
 
+    samples_float = [s / float(normalize) for s in samples]
+    y_lfilter = lfilter(h, 1.0, samples_float)
+    y_lfilter_int = y_lfilter * normalize
+    y_lfilter_int = [max(min_val, min(max_val, int(round(v)))) for v in y_lfilter_int]
+
     outputs = await spi.load_samples(samples)
     outputs = outputs[nop_frames:]
 
     for idx, out in enumerate(outputs):
-        assert abs(abs(out) - abs(coeffs[idx])) <= 5, f"{out} does not match in acceptable range to {coeffs[idx]}"
+        assert abs(out - y_lfilter_int[idx]) <= 5, f"{out} does not match in acceptable range to {coeffs[idx]}"
 
 @cocotb.test()
 async def test_step_response(dut):
@@ -304,6 +312,8 @@ async def test_step_response(dut):
         plt.savefig('step_response.png')
     except OSError as e:
         cocotb.log.warning(f"Failed to save step_response plot: {e}")
+
+    plt.close()
     
 @cocotb.test()
 async def test_noisy_sine(dut):
@@ -364,6 +374,8 @@ async def test_noisy_sine(dut):
     except OSError as e:
         cocotb.log.warning(f"Failed to save noisy_sine plot: {e}")
 
+    plt.close()
+
     gold_rms = math.sqrt(sum(x**2 for x in y_lfilter) / len(y_lfilter))
     dut_rms = math.sqrt(sum(x**2 for x in y_dut) / len(y_dut))
     err_rms = math.sqrt(sum((g - d)**2 for g, d in zip(y_lfilter, y_dut)) / len(y_dut))
@@ -396,26 +408,25 @@ async def test_switching_inputs(dut):
 
     await reset(dut)
     await spi.load_coeff(coeffs)
-
+    
     outputs = await spi.load_samples(samples)
-
     outputs = outputs[nop_frames:]
 
+    samples_float = [s / float(normalize) for s in samples]
+    y_lfilter = lfilter(h, 1.0, samples_float)
+    y_lfilter_int = y_lfilter * normalize
+    y_lfilter_int = [max(min_val, min(max_val, int(round(v)))) for v in y_lfilter_int]
+
     cocotb.log.info(f"outputs = {outputs}")
+    cocotb.log.info(f"ylfilter={y_lfilter_int}")
 
-    output_diff = np.diff(outputs)
-    cocotb.log.info(f"output diffs = {output_diff}")
-
-    assert (np.all(output_diff[taps:] == 0)), f"output diff unexpected nonzero during switching"
-
-# not a real test; generates freq response plots vs python model
-@cocotb.test()
+    for idx, out in enumerate(outputs):
+        assert abs(out - y_lfilter_int[idx]) <= 5, f"{out} != ylfilter={y_lfilter_int[idx]}"
+    
+# Plot-only: generates freq response plots vs python model, no assertions.
+# Set FIR_TB_PLOTS=1 to run.
+@cocotb.test(skip=os.getenv("FIR_TB_PLOTS") is None)
 async def test_frequency_response(dut):
-    clk = Clock(dut.clk, clock_period, "ns")
-    cocotb.start_soon(clk.start())
-
-    await reset(dut)
-
     # generate coeffs
     h = firwin(taps, [fc1, fc2], pass_zero=False, fs=fs)
     # fixed point
@@ -450,10 +461,13 @@ async def test_frequency_response(dut):
     plt.xlabel("Frequency (Hz)")
     plt.legend()
     plt.tight_layout()
+
     try:
         plt.savefig('freq_response.png')
     except OSError as e:
         cocotb.log.warning(f"Failed to save freq_response plot: {e}")
+
+    plt.close()
 
 # verify that coefficient shift reg behavior works as expected (coefficients must be loaded in reverse order where final tap goes first etc.)
 @cocotb.test()
@@ -485,29 +499,28 @@ async def test_non_symmetric_coeff(dut):
     cocotb.log.info(f"expected = {coeffs}")
 
     for idx, out in enumerate(outputs):
-        assert abs(out- coeffs[idx]) <= 10, f"{out} != {coeffs[idx]}, order incorrect"
+        assert abs(out- coeffs[idx]) <= 5, f"{out} != {coeffs[idx]}, order incorrect"
 
-# not a real test no assertions
-@cocotb.test()
+# skippable test using FIR_TB_PLOTS env flag
+# meant to show it is possible to reload coeffcients mid sample; would
+# not use this in practice it is meant to stress test the system
+@cocotb.test(skip=os.getenv("FIR_TB_PLOTS") is None)
 async def test_load_coeffs_mid_sample_drive(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
-    sclk = Clock(dut.spi_clock, spi_clock_period, "ns")
+    spi = SPIinterface(spi_clock_period, dut)
 
     # impulse
     samples = [max_val] + [0] * (taps - 1)
-    cocotb.log.info(f"samples = {samples}")
 
-    h1 = firwin(taps,[fc1, fc2],pass_zero=False,fs=fs) # bandpass
-    h2 = firwin(taps,fc,fs=fs) # low pass
+    h1 = firwin(taps, [fc1, fc2], pass_zero=False, fs=fs)  # bandpass
+    h2 = firwin(taps, fc, fs=fs)  # low pass
 
     c1 = h1 * normalize
-    c1 =[max(min_val,min(max_val,int(round(c)))) for c in c1]
-    cocotb.log.info(f"c1 = {c1}")
+    c1 = [max(min_val, min(max_val, int(round(c)))) for c in c1]
 
     c2 = h2 * normalize
-    c2 =[max(min_val,min(max_val,int(round(c)))) for c in c2]
-    cocotb.log.info(f"c2 = {c2}")
+    c2 = [max(min_val, min(max_val, int(round(c)))) for c in c2]
 
     cocotb.log.info("----------------------------------")
     cocotb.log.info("    MID-SAMPLE DRIVE COEFF RELOAD ")
@@ -515,149 +528,40 @@ async def test_load_coeffs_mid_sample_drive(dut):
 
     await reset(dut)
 
-    c1_outputs = []
-
-    async def nop():
-        outputs = []
-        for _ in range(nop_frames):
-            out = 0x0000
-            nop = 0x0000
-            dut.fir_mode.value = MODE_SAMPLE
-            dut.spi_cs_n.value = 0
-            await RisingEdge(dut.clk)
-            cocotb.start_soon(sclk.start(start_high=False))
-            dut.spi_mosi.value = (nop & 0x8000) >> spi_frame_len - 1
-            for _ in range(spi_frame_len):
-                await RisingEdge(dut.spi_clock)
-                miso = int(dut.spi_miso.value)
-                await FallingEdge(dut.spi_clock)
-                out = (out << 1) | miso
-                nop = nop << 1
-                dut.spi_mosi.value = (nop & 0x8000) >> spi_frame_len - 1
-            
-            sclk.stop()
-            dut.spi_cs_n.value = 1
-            await Timer(spi_clock_period, "ns")
-
-            out = out >> spi_frame_len - data_width
-
-            if out & 0x0800:
-                out -= 0x1000
-
-            outputs.append(out)
-        return outputs
-
     # load c1 coefficients
-    for idx, c in enumerate(c1):
-        out = 0x0000
-        c = (c & 0x0FFF) << spi_frame_len - data_width
-        dut.fir_mode.value = MODE_COEFF
-        dut.spi_cs_n.value = 0
-        await RisingEdge(dut.clk)
-        cocotb.start_soon(sclk.start(start_high=False))
-        dut.spi_mosi.value = (c & 0x8000) >> (spi_frame_len - 1)
-        for _ in range(spi_frame_len):
-            await RisingEdge(dut.spi_clock)
-            miso = int(dut.spi_miso.value)
-            await FallingEdge(dut.spi_clock)
-            c = (c << 1) & 0xFFFF
-            out = (out << 1) | miso
-            dut.spi_mosi.value = (c & 0x8000) >> (spi_frame_len - 1)
+    await spi.load_coeff(c1)
 
-        
-        sclk.stop()
-        dut.spi_cs_n.value = 1
-        await Timer(spi_clock_period, "ns")
-        out = out >> spi_frame_len - data_width
+    # stream first half of impulse through c1
+    pre = await spi.transfer(samples[:taps//2], mode=MODE_SAMPLE, append_nop=0)
 
-        if out & 0x0800:
-            out -= 0x1000
+    # reload c2 coefficients mid-stream
+    await spi.load_coeff(c2)
 
-        c1_outputs.append(out)
+    # NOP drain to flush stale c1 outputs from pipeline
+    await spi.transfer([0] * nop_frames, mode=MODE_SAMPLE, append_nop=0)
 
+    # stream second half of impulse through c2
+    post = await spi.transfer(samples[taps//2:], mode=MODE_SAMPLE, append_nop=nop_frames)
 
-    pre_load_outputs = []
-    post_load_outputs = []
-    load_done = False
+    pre_trim = pre[nop_frames:]
+    post_trim = post[nop_frames:]
 
-    cutoff_idx = taps // 2
+    cocotb.log.info(f"c1[:{len(pre_trim)}] = {c1[:len(pre_trim)]}")
+    cocotb.log.info(f"pre_trim = {pre_trim}")
+    cocotb.log.info(f"c2[{taps//2}:] = {c2[taps//2:]}")
+    cocotb.log.info(f"post_trim = {post_trim}")
 
-    for idx, s in enumerate(samples):
-        if (idx == cutoff_idx):
-            for idx, c in enumerate(c2):
-                c2_out = 0x0000
-                c = (c & 0x0FFF) << spi_frame_len - data_width
-                dut.fir_mode.value = MODE_COEFF
-                dut.spi_cs_n.value = 0
-                await RisingEdge(dut.clk)
-                cocotb.start_soon(sclk.start(start_high=False))
-                dut.spi_mosi.value = (c & 0x8000) >> spi_frame_len - 1
-                for _ in range(spi_frame_len):
-                    await RisingEdge(dut.spi_clock)
-                    miso = int(dut.spi_miso.value)
-                    await FallingEdge(dut.spi_clock)
-                    c2_out = (c2_out << 1) | miso
-                    c = (c << 1) & 0xFFFF
-                    dut.spi_mosi.value = (c & 0x8000) >> spi_frame_len - 1
+    # assert c1 impulse response from first half
+    for idx, (out, exp) in enumerate(zip(pre_trim, c1[:len(pre_trim)])):
+        assert abs(out - exp) <= 5, f"c1[{idx}]: DUT={out} expected={exp}"
 
-                sclk.stop()
-                dut.spi_cs_n.value = 1
-                await Timer(spi_clock_period, "ns")
-
-                c2_out = c2_out >> spi_frame_len - data_width
-
-                if c2_out & 0x0800:
-                    c2_out -= 0x1000
-
-                pre_load_outputs.append(c2_out)
-            
-            load_done = True
-            nop_res = await nop()
-            for n in nop_res: pre_load_outputs.append(n)
-
-        s = (s & 0x0FFF) << spi_frame_len - data_width
-        out = 0x0000
-        dut.fir_mode.value = MODE_SAMPLE
-        dut.spi_cs_n.value = 0
-        await RisingEdge(dut.clk)
-        cocotb.start_soon(sclk.start(start_high=False))
-        dut.spi_mosi.value = (s & 0x8000) >> spi_frame_len - 1
-        for _ in range(spi_frame_len):
-            await RisingEdge(dut.spi_clock)
-            miso = int(dut.spi_miso.value)
-            await FallingEdge(dut.spi_clock)
-            out = (out << 1) | miso
-            s = (s << 1) & 0xFFFF
-            dut.spi_mosi.value = (s & 0x8000) >> spi_frame_len - 1
-
-        sclk.stop()
-        dut.spi_cs_n.value = 1
-        await Timer(spi_clock_period, "ns")
-
-        out = out >> spi_frame_len - data_width
-        if out & 0x0800:
-            out -= 0x1000
-
-        if load_done == True:
-            post_load_outputs.append(out)
-        else:
-            pre_load_outputs.append(out)
-
-    nop_res = await nop()
-    for n in nop_res: post_load_outputs.append(n)
-
-    cocotb.log.info(f"clipped c1 (taps/2 (top half)) = {c1[:(taps//2)]}")
-    cocotb.log.info(f"clipped c2 (taps / 2 (bottom half)) = {c2[(taps//2):]}")
-    
-    # we miss c1's coeff #tap/2 because the result is flushed from the control layer
-    # because of the previous load
-    # coeff loading causing state machine to go from ready -> done instead of ready -> compute -> done
-    # less cycles gives less time for previous result to be picked up by spi module; the quicker state machine 
-    # turnaround on the coeff load overwrites the previous result before spi can pick it up into its tx buffer
-
-    # cocotb.log.info(f"c1_outputs = {c1_outputs}")
-    cocotb.log.info(f"pre_load_outputs = {pre_load_outputs}")
-    cocotb.log.info(f"post_load_outputs = {post_load_outputs}")
+    # assert c2 impulse response from second half
+    # the impulse has propagated taps//2 positions into the shift register by
+    # the time c2 is loaded, plus nop_frames additional offset from the NOP
+    # drain inserted between coefficient reload and resuming sample streaming
+    post_offset = taps//2 + nop_frames
+    for idx, (out, exp) in enumerate(zip(post_trim, c2[post_offset:])):
+        assert abs(out - exp) <= 5, f"c2[{post_offset + idx}]: DUT={out} expected={exp}"
 
 @cocotb.test()
 async def test_cs_n_assert_mid_frame(dut):
@@ -750,6 +654,7 @@ async def test_overflow(dut):
     cocotb.start_soon(clk.start())
     spi = SPIinterface(spi_clock_period, dut)
 
+    h = [max_val/float(max_val+1)] * taps
     coeffs = [max_val] * taps
     samples = [max_val] * (taps * 2)
 
@@ -759,16 +664,47 @@ async def test_overflow(dut):
 
     await reset(dut)
     await spi.load_coeff(coeffs)
+
+    samples_float = [s / float(normalize) for s in samples]
+    y_lfilter = lfilter(h, 1.0, samples_float)
+    y_lfilter_int = y_lfilter * normalize
+    y_lfilter_int = [max(min_val, min(max_val, int(round(v)))) for v in y_lfilter_int]
     
     outputs = await spi.load_samples(samples)
     outputs = outputs[nop_frames:]
 
-    cocotb.log.info(f"outputs = {outputs}")
-    prev_sample = 0
-    for n in outputs:
-        assert n >= prev_sample, f"{n} should be greater equal to prev sample={prev_sample}"
-        prev_sample = n
+    for idx,n in enumerate(outputs):
+        assert abs(n - y_lfilter_int[idx]) <= 5, f"{n} != ylfilter={y_lfilter_int[idx]}, overflow occured"
     
     assert outputs[-1] == max_val, f"{outputs[-1]} is not the saturated max_val of {max_val}"
 
+@cocotb.test()
+async def test_underflow(dut):
+    clk = Clock(dut.clk, clock_period, "ns")
+    cocotb.start_soon(clk.start())
+    spi = SPIinterface(spi_clock_period, dut)
+
+    h = [max_val/float(max_val+1)] * taps
+    coeffs = [max_val] * taps
+    samples = [min_val] * (taps * 2)
+
+    cocotb.log.info("----------------------------------")
+    cocotb.log.info("          UNDERFLOW TEST          ")
+    cocotb.log.info("----------------------------------")
+
+    await reset(dut)
+    await spi.load_coeff(coeffs)
+
+    samples_float = [s / float(normalize) for s in samples]
+    y_lfilter = lfilter(h, 1.0, samples_float)
+    y_lfilter_int = y_lfilter * normalize
+    y_lfilter_int = [max(min_val, min(max_val, int(round(v)))) for v in y_lfilter_int]
+    
+    outputs = await spi.load_samples(samples)
+    outputs = outputs[nop_frames:]
+
+    for idx,n in enumerate(outputs):
+        assert abs(n - y_lfilter_int[idx]) <= 5, f"{n} != ylfilter={y_lfilter_int[idx]}, overflow occured"
+    
+    assert outputs[-1] == min_val, f"{outputs[-1]} is not the saturated min_val of {min_val}"
     

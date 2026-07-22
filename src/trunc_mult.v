@@ -85,6 +85,10 @@ module trunc_mult #(
 
   // partial produts for the error correct IC column
   // separate from above genblk because ran into indexing issues
+  // note: this ic column indexing is only valid for DropBits < DataWidth
+  // the baugh wooley signed correction + IC error correction will fail
+  // if you drop half the bits (DataWidth amount or more) because h=0 and beyond
+  // is a special case and is not supported
   reg [DataWidth-1:0] ic_column;
   always @(*) begin : comb_ic_column_partial_product
     ic_column = '0;
@@ -102,7 +106,7 @@ module trunc_mult #(
   // middle ic: 2 < i < n - h - 1
   // subtract all by 1 to use base 0 indexing
   // middle ic values are 11 bit values max value of 11 (1+1+1+1...+1=11), needs 4 bits to hold max possible
-  // "Low error Truncated Multipliers for DSP applications" Garafolo et al.
+  // "Low error Truncated Multipliers for DSP applications" Garofalo et al.
   reg [  EdgeICWidth-1:0] edge_ic;
   reg [MiddleICWidth-1:0] middle_ic;
   always @(*) begin : comb_middle_edge_error_ic_terms
@@ -134,7 +138,7 @@ module trunc_mult #(
       end
     end
     // these shifts values are derived from:
-    // "Low error Truncated Multipliers for DSP applications" Garafolo et al.
+    // "Low error Truncated Multipliers for DSP applications" Garofalo et al.
     accumulate = accumulate + {{(OutputSlice + 1 - EdgeICWidth){1'b0}},   edge_ic} +
                           ({{{(OutputSlice + 1 - MiddleICWidth){1'b0}}, middle_ic}} << 1);
   end
@@ -142,3 +146,5 @@ module trunc_mult #(
   assign out = accumulate[OutputSlice:1];
 
 endmodule
+
+`default_nettype wire

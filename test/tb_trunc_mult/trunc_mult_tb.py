@@ -5,6 +5,7 @@ import os
 import csv
 
 TEST_SEED = int(os.getenv("FIR_TB_SEED", "12345"))
+cocotb.log.info(f"FIR_TB_SEED={TEST_SEED}")
 
 max_val = 2047
 min_val = -2048
@@ -14,15 +15,13 @@ output_width = data_width * 2
 
 @cocotb.test()
 async def test_trunc_mult(dut):
-    cocotb.log.info(f"inside test")
-
     rng = np.random.default_rng(TEST_SEED)
 
     num_pairs = 25
     total_output_size = num_pairs * num_pairs
 
-    a = rng.integers(low=min_val, high=max_val, size=num_pairs)
-    b = rng.integers(low=min_val, high=max_val, size=num_pairs)
+    a = rng.integers(low=min_val, high=max_val+1, size=num_pairs)
+    b = rng.integers(low=min_val, high=max_val+1, size=num_pairs)
 
     golden_outputs = []
     trunc_outputs = [[] for _ in range(drop_bits_size)]

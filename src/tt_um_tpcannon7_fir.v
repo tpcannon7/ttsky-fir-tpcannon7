@@ -81,3 +81,6 @@ module tt_um_tpcannon7_fir (
   wire _unused = &{uio_in[7:4], uio_in[2], ui_in[7:1], ena, 1'b0};
 
 endmodule
+
+`default_nettype wire
+

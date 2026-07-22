@@ -171,3 +171,5 @@ module fir_filter #(
   );
 
 endmodule
+
+`default_nettype wire

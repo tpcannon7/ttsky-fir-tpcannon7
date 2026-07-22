@@ -17,7 +17,7 @@
 
  - `src/`: Verilog design files directory
     - `tt_um_tpcannon7_fir.v`: Tiny Tapeout Top Level Wrapper
-    - `fir_filter.v`: Core FIR logic, samples/coefficient shift lines, truncated multiplier module
+    - `fir_filter.v`: Core FIR logic, samples/coefficient shift lines, instantiates truncated multiplier module
     - `trunc_mult.v`: Truncated Baugh-Wooley (Signed) 12x12 bit multiplier module
     - `spi.v`: SPI slave interface
     - `control.v`: Small control/routing layer to buffer SPI RX/TX and FIR core I/O
