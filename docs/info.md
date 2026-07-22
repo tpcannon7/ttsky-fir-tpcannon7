@@ -127,7 +127,7 @@ MISO  X  d15  d14  d13  d12  d11  d10  d9   d8   d7   d6   d5   d4   d3   d2   d
 
 
 
-### Area–Error Tradeoff
+### Area–Error Tradeoff {#areaerror-tradeoff}
 
 ![Truncated Multiplier Tradeoff](trunc_mult_tradeoff.png)
 
@@ -147,25 +147,25 @@ The truncated multiplier was synthesized across all DropBits values (0–11) aga
 
 
 
-## Noisy Sinusoid Filtering
+## Noisy Sinusoid Filtering {#noisy-sinusoid-filtering}
 
 ![Noisy Sine Filtering](noisy_sine_comparison.png)
 
 A 2kHz sinusoid with added Gaussian noise filtered by the DUT with low-pass coefficients (10KHz) vs the Python lfilter model.
 
-## Impulse Response
+## Impulse Response {#impulse-response}
 
 ![Impulse Response](impulse_response.png)
 
 The DUT output (red) overlaid on the ideal fixed-point coefficients (blue). Generated with 10KHz low pass coeffcients.
 
-## Step Response
+## Step Response {#step-response}
 
 ![Step Response](step_response.png)
 
 The DUT step response (red) vs Python lfilter (blue). The FIR fills in over 36 taps and then converges to the expected steady state step response.
 
-## Frequency Response
+## Frequency Response {#frequency-response}
 
 ![Frequency Response](freq_response.png)
 
