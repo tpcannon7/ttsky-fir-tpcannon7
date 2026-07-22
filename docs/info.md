@@ -147,10 +147,6 @@ The truncated multiplier was synthesized across all DropBits values (0–11) aga
 
 
 
-# GDS 2D Preview
-
-![GDS 2D Preview](https://tpcannon7.github.io/ttsky-fir-tpcannon7/gds_render.png)
-
 ## Noisy Sinusoid Filtering
 
 ![Noisy Sine Filtering](noisy_sine_comparison.png)
