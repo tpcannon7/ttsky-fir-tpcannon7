@@ -55,7 +55,7 @@ def generate_plots(max_abs_error, mean_abs_error, yosys_stats):
     cells = [row[0] for row in yosys_stats]
     area = [row[1] for row in yosys_stats]
 
-    fig, (ax_err, ax_area) = plt.subplots(2, 1, sharex=True, figsize=(8, 6))
+    fig, (ax_err, ax_area) = plt.subplots(2, 1, sharex=True, figsize=(6.4, 4.8))
     fig.suptitle("12×12 Truncated Multiplier Area–Error Tradeoff (Sky130A HD)", fontweight='bold')
 
     ax_err.plot(x, max_abs_error, 'b-', linewidth=1.5, label='max |error|')
@@ -80,7 +80,7 @@ def generate_plots(max_abs_error, mean_abs_error, yosys_stats):
     ax_area.legend(lines1 + lines2, labels1 + labels2, loc='best')
 
     plt.tight_layout()
-    fig.savefig(os.path.join(DOCS_DIR, "trunc_mult_tradeoff.png"), dpi=150)
+    fig.savefig(os.path.join(DOCS_DIR, "trunc_mult_tradeoff.png"))
 
 
     

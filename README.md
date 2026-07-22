@@ -36,9 +36,16 @@
 |`uio_out[2]` |MISO |
 |`uio_in[3]`  | SCLK| 
 
-# GDS 2D Preview
+## GDS 2D Preview
 
 ![GDS 2D Preview](https://tpcannon7.github.io/ttsky-fir-tpcannon7/gds_render.png)
+
+
+## Truncated Multiplier Area–Error Tradeoff
+
+![Truncated Multiplier Tradeoff](docs/trunc_mult_tradeoff.png)
+
+The 12×12 truncated multiplier (Baugh-Wooley signed, with Garofalo IC error correction) was synthesized against the Sky130A HD standard cell library across all DropBits parameters. The dashed line at DropBits=8 marks the design point used in the FIR filter.
 
 ## Noisy Sinusoid Filtering Comparison
 
@@ -61,9 +68,3 @@
 ![Frequency Response](docs/freq_response.png)
 
 *50-60KHz band-pass frequency response*
-
-## Truncated Multiplier Area–Error Tradeoff
-
-![Truncated Multiplier Tradeoff](docs/trunc_mult_tradeoff.png)
-
-The 12×12 truncated multiplier (Baugh-Wooley signed, with Garofalo IC error correction) was synthesized against the Sky130A HD standard cell library across all DropBits parameters. The dashed line at DropBits=8 marks the design point used in the FIR filter.
