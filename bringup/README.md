@@ -58,7 +58,8 @@ Python
     - Gowin Synthesis appeared to handle procedural combinational assignments differently than Yosys did during gate-level simulation
 - The revised implementation matched the Python reference model and increased the maximum operating frequency from 24 MHz to 61 MHz while reducing LUT utilization
 - Revised implementation of the truncated multiplier at `fpga/src/new_trunc_mult.v`
-- To verify functional equivalence, both the original and revised multipliers were synthesized and tech-mapped using Yosys and the Sky130A HD library. Both implementations produced identical mapped gate counts, confirming that they describe the same RTL logic for the ASIC flow
+- Functional equivalence between the original and revised RTL implementations was formally verified using Yosys equivalence checking, confirming that the RTL rewrite preserves the original design's functionality while improving compatibility with the Gowin synthesis flow
+- Yosys equivalence script located at `fpga/trunc_mult_equiv.tcl`
 
 | FPGA Statistics    |  Original Multiplier |   Revised Multiplier |
 | -------------------| --------------------:| --------------------:|

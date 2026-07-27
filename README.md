@@ -4,6 +4,7 @@
 
   - 12 bit samples/coefficients, 36 Taps
   - Runtime coefficient reprogramming
+    - Supports arbitrary coefficient sets, including symmetric (linear-phase) and asymmetric (non-linear-phase) FIR filters
   - SPI Interface (Mode 0)
   - Internal clock @ 40 MHz
     - *~294 kSps @ SCLK = 5 MHz*

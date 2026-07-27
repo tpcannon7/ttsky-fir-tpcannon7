@@ -14,7 +14,8 @@ You can also include images in this folder and reference them in the markdown. E
         - FIR_MODE = 1 (SAMPLE)
         - FIR_MODE = 0 (COEFFICIENT)
     - Coefficients are in format Q1.11, 11 decimal bits
-        - When generating coefficient vector, ensure you multiply by $2^{11}$ and round to the nearest whole number to match the input range of [-2048, 2047] for 12-bit signed
+        - When generating coefficient vector, ensure you multiply each floating point coefficient by $2^{11}$ and round to the nearest whole number to match Q1.11 input range of [-2048, 2047] for 12-bit signed integers
+        - Coefficients are not required to be symmetric, allowing both linear-phase and non-linear-phase FIR filters to be implemented
     - Coefficients must be loaded in **reverse order** (last tap first) due to the coefficient shift register architecture
     - There is an expected amount of error due to the fixed point representation and truncated multiplier precision
         - Truncated multiplier accumulates error across taps due to serial MAC architecture (one multiplier is used across all taps)
@@ -30,6 +31,10 @@ You can also include images in this folder and reference them in the markdown. E
    - On fresh startup of filter, best practice is to load your coefficients for all taps and then continuously stream samples
    - If a coefficient reload is desired to change filter behavior during runtime, the recommended setup is to flush the entire sample line with 0x0000/NOPs equal to tap count (36 taps) to not corrupt the filter math with stale samples and then load new coefficients
    - Outputs during this NOP/reloading phase should be ignored; they are stale calculations from the previous filter settings
+
+## Validation
+- Design was functionally validated on a Gowin GW5A FPGA using an STM32 Nucleo-F446RE SPI master
+- Validation methodology and measured results are documented in `bringup/README.md`
 
 ## SPI Overview
 
