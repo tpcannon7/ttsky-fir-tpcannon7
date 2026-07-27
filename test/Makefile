@@ -46,8 +46,7 @@ include $(shell cocotb-config --makefiles)/Makefile.sim
 
 .PHONY: plots
 plots:
-	FIR_TB_PLOTS=1 COCOTB_TEST_FILTER=test_noisy_sine $(MAKE) sim && \
+	COCOTB_TEST_FILTER=test_noisy_sine $(MAKE) sim && \
 	  mv -f noisy_sine_comparison.png ../docs/
-	FIR_TB_PLOTS=1 COCOTB_TEST_FILTER=test_frequency_response $(MAKE) sim && mv -f freq_response.png ../docs/ || true
-	FIR_TB_PLOTS=1 COCOTB_TEST_FILTER=test_impulse_response $(MAKE) sim && mv -f impulse_response.png ../docs/ || true
-	FIR_TB_PLOTS=1 COCOTB_TEST_FILTER=test_step_response $(MAKE) sim && mv -f step_response.png ../docs/ || true
+	COCOTB_TEST_FILTER=test_impulse_response $(MAKE) sim && mv -f impulse_response.png ../docs/ && mv -f impulse_freq_response.png ../docs/ || true
+	COCOTB_TEST_FILTER=test_step_response $(MAKE) sim && mv -f step_response.png ../docs/ || true

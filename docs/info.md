@@ -158,7 +158,7 @@ A 2kHz sinusoid with added Gaussian noise filtered by the DUT with low-pass coef
 
 ![Impulse Response](impulse_response.png)
 
-The DUT output (red) overlaid on the ideal fixed-point coefficients (blue). Generated with 10KHz low pass coefficients.
+The DUT output (red) overlaid on the ideal fixed-point coefficients (blue). Generated with 50-60 KHz band-pass coefficients.
 
 ## Step Response
 
@@ -168,6 +168,6 @@ The DUT step response (red) vs Python lfilter (blue). The FIR fills in over 36 t
 
 ## Frequency Response
 
-![Frequency Response](freq_response.png)
+![Frequency Response](impulse_freq_response.png)
 
-The frequency response of the 12-bit fixed-point model (Q12.0 samples, Q1.11 coefficients) vs the Python ideal model (floating-point). Frequency response generated with 50-60KHz band-pass coefficients.
+The frequency response of the 12-bit fixed-point model used in the DUT (Q12.0 samples, Q1.11 coefficients) vs the Python ideal model (floating-point). Frequency response generated with 50-60KHz band-pass coefficients.

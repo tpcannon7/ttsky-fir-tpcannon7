@@ -21,3 +21,4 @@ TODO.md
 *.log
 *.csv
 test/tb_trunc_mult/*.png
+bringup/stm32/*.png

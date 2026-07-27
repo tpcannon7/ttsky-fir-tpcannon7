@@ -181,7 +181,7 @@ async def test_impulse_response(dut):
     cocotb.start_soon(clk.start())
     spi = SPIinterface(spi_clock_period, dut)
 
-    h = firwin(taps, fc, fs=fs)
+    h = firwin(taps, [fc1, fc2], pass_zero=False, fs=fs)
     coeffs = h * normalize
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
     cocotb.log.info(f"fixed coeffs = {coeffs}")
@@ -214,7 +214,7 @@ async def test_impulse_response(dut):
     for idx, out in enumerate(outputs):
         assert abs(out - y_lfilter_int[idx]) <= 3, f"{out} does not match in acceptable range to {y_lfilter_int[idx]}"
 
-    plt.figure()
+    fig = plt.figure()
     plt.plot(y_lfilter_int, 'b.--', label='python lfilter', linewidth=1.5)
     plt.plot(outputs, 'r-', label='DUT output', linewidth=1)
     plt.ylabel("Amplitude (Integer Steps)")
@@ -226,6 +226,38 @@ async def test_impulse_response(dut):
         plt.savefig('impulse_response.png')
     except OSError as e:
         cocotb.log.warning(f"Failed to save impulse_response plot: {e}")
+
+    plt.close(fig)
+
+    float_outputs = [o / float(normalize) for o in outputs]
+    w_dut, h_dut = freqz(float_outputs, 1.0, fs=fs)
+    w_true, h_true = freqz(h, 1.0, fs=fs)
+
+    mag_dut = 20 * np.log10(np.maximum(abs(h_dut), 1e-6))
+    mag_true = 20 * np.log10(np.maximum(abs(h_true), 1e-6))
+    phase_dut = np.angle(h_dut)
+    phase_true = np.angle(h_true)
+
+    plt.subplot(2, 1, 1)
+    plt.title("Frequency Response of DUT vs. Python Model")
+    plt.plot(w_dut, mag_dut, 'r-', label="DUT", linewidth=1)
+    plt.plot(w_true, mag_true, 'b--', label="python model", linewidth=1.5)
+    plt.ylabel("Magnitude (dB)")
+    plt.legend()
+
+    plt.subplot(2, 1, 2)
+    plt.plot(w_dut, phase_dut, 'r-', label="DUT", linewidth=1)
+    plt.plot(w_true, phase_true, 'b--', label="python model", linewidth=1.5)
+
+    plt.ylabel("Phase (rad)")
+    plt.xlabel("Frequency (Hz)")
+    plt.legend()
+    plt.tight_layout()
+
+    try:
+        plt.savefig('impulse_freq_response.png')
+    except OSError as e:
+        cocotb.log.warning(f"Failed to save freq_response plot: {e}")
 
     plt.close()
 
@@ -422,52 +454,6 @@ async def test_switching_inputs(dut):
 
     for idx, out in enumerate(outputs):
         assert abs(out - y_lfilter_int[idx]) <= 5, f"{out} != ylfilter={y_lfilter_int[idx]}"
-    
-# Plot-only: generates freq response plots vs python model, no assertions.
-# Set FIR_TB_PLOTS=1 to run.
-@cocotb.test(skip=os.getenv("FIR_TB_PLOTS") is None)
-async def test_frequency_response(dut):
-    # generate coeffs
-    h = firwin(taps, [fc1, fc2], pass_zero=False, fs=fs)
-    # fixed point
-    coeffs = h * normalize
-    coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
-    coeffs = [c / float(normalize) for c in coeffs]
-
-    w_dut, h_dut = freqz(coeffs, 1.0, fs=fs)
-    w_true, h_true = freqz(h, 1.0, fs=fs)
-
-    cocotb.log.info("----------------------------------")
-    cocotb.log.info("         FREQUENCY RESPONSE       ")
-    cocotb.log.info("----------------------------------")
-    
-    mag_dut = 20 * np.log10(np.maximum(abs(h_dut), 1e-6))
-    mag_true = 20 * np.log10(np.maximum(abs(h_true), 1e-6))
-    phase_dut = np.angle(h_dut)
-    phase_true = np.angle(h_true)
-
-    plt.subplot(2, 1, 1)
-    plt.title("Frequency Response of 12-bit fixed point vs. Python Model")
-    plt.plot(w_dut, mag_dut, 'r-', label="12-bit fixed-point", linewidth=1)
-    plt.plot(w_true, mag_true, 'b--', label="python model", linewidth=1.5)
-    plt.ylabel("Magnitude (dB)")
-    plt.legend()
-
-    plt.subplot(2, 1, 2)
-    plt.plot(w_dut, phase_dut, 'r-', label="12-bit fixed-point", linewidth=1)
-    plt.plot(w_true, phase_true, 'b--', label="python model", linewidth=1.5)
-
-    plt.ylabel("Phase (rad)")
-    plt.xlabel("Frequency (Hz)")
-    plt.legend()
-    plt.tight_layout()
-
-    try:
-        plt.savefig('freq_response.png')
-    except OSError as e:
-        cocotb.log.warning(f"Failed to save freq_response plot: {e}")
-
-    plt.close()
 
 # verify that coefficient shift reg behavior works as expected (coefficients must be loaded in reverse order where final tap goes first etc.)
 @cocotb.test()
@@ -501,10 +487,10 @@ async def test_non_symmetric_coeff(dut):
     for idx, out in enumerate(outputs):
         assert abs(out- coeffs[idx]) <= 5, f"{out} != {coeffs[idx]}, order incorrect"
 
-# skippable test using FIR_TB_PLOTS env flag
+# skippable test using FIR_TB_OPTIONAL env flag
 # meant to show it is possible to reload coeffcients mid sample; would
 # not use this in practice it is meant to stress test the system
-@cocotb.test(skip=os.getenv("FIR_TB_PLOTS") is None)
+@cocotb.test(skip=os.getenv("FIR_TB_OPTIONAL") is None)
 async def test_load_coeffs_mid_sample_drive(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())

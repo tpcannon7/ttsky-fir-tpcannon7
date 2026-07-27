@@ -22,6 +22,7 @@ FIR_TB_PLOTS=1 make -B
 ```
 
 Generate plots from test suite:
+*Note: does not make plot from tb_trunc_mult/*
 ```
 make plots
 ```

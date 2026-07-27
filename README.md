@@ -12,6 +12,7 @@
     - [General Operation](docs/info.md#general-operation)
     - [SPI Overview](docs/info.md#spi-overview)
     - [Truncated Baugh-Wooley Multiplier Design](docs/info.md#truncated-baugh-wooley-multiplier-design)
+    - [FPGA Emulation & Validation](bringup/README.md)
 
 ## Project Structure
 
@@ -57,7 +58,7 @@ The 12×12 truncated multiplier (Baugh-Wooley signed, with Garofalo IC error cor
 
 ![Impulse Response](docs/impulse_response.png)
 
-*10 KHz low pass filter impulse response*
+*50-60 KHz band-pass filter impulse response*
 
 ## Step Response
 
@@ -65,6 +66,6 @@ The 12×12 truncated multiplier (Baugh-Wooley signed, with Garofalo IC error cor
 
 ## Frequency Response
 
-![Frequency Response](docs/freq_response.png)
+![Frequency Response](docs/impulse_freq_response.png)
 
 *50-60KHz band-pass frequency response*
