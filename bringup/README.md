@@ -49,7 +49,7 @@ Python
 
 ### FPGA error vs. Python lfilter Model
 ![FPGA Error Plot](../docs/error_fpga_plot.png)
-- Error remained bounded to approximately $\pm$5 LSBs with respect to the floating point reference, confirming the truncated multiplier and fixed-point representation are within a reasonable threshold
+- Error remained bounded to approximately ±5 LSBs with respect to the floating point reference, confirming the truncated multiplier and fixed-point representation are within a reasonable threshold
 
 
 ## Issues Encountered

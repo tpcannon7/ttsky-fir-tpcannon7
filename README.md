@@ -60,7 +60,7 @@ The 12×12 truncated multiplier (Baugh-Wooley signed, with Garofalo IC error cor
 
 ## FPGA Error Plot
 ![FPGA Error Plot](docs/error_fpga_plot.png)
-Error remains bounded to approximately $\pm$5 LSB relative to the floating-point reference, consistent with the fixed-point arithmetic and truncated multiplier design.
+Error remains bounded to approximately ±5 LSB relative to the floating-point reference, consistent with the fixed-point arithmetic and truncated multiplier design.
 
 ## FPGA Hardware Validation Setup
 ![FPGA/MCU Setup](docs/fpga_stm32_test_setup.png)
