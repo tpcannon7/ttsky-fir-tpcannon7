@@ -1,5 +1,17 @@
 # STM32 vendor libraries
-bringup/stm32/nucleo-f446re/Drivers/** linguist-vendored
+bringup/stm32/nucleo-f446re/Drivers/** linguist-generated
 
-# CubeMX-generated startup code
+# CubeMX/CubeIDE generated code
 bringup/stm32/nucleo-f446re/Core/Startup/** linguist-generated
+bringup/stm32/nucleo-f446re/Core/Inc/** linguist-generated
+bringup/stm32/nucleo-f446re/Core/Src/stm32f4xx_hal_msp.c linguist-generated
+bringup/stm32/nucleo-f446re/Core/Src/stm32f4xx_it.c linguist-generated
+bringup/stm32/nucleo-f446re/Core/Src/syscalls.c linguist-generated
+bringup/stm32/nucleo-f446re/Core/Src/sysmem.c linguist-generated
+bringup/stm32/nucleo-f446re/Core/Src/system_stm32f4xx.c linguist-generated
+
+# Gowin IP generation
+bringup/fpga/src/gowin_pll/** linguist-generated
+bringup/fpga/src/pll_init.v linguist-generated
+
+
