@@ -1,0 +1,5 @@
+# STM32 vendor libraries
+bringup/stm32/nucleo-f446re/Drivers/** linguist-vendored
+
+# CubeMX-generated startup code
+bringup/stm32/nucleo-f446re/Core/Startup/** linguist-generated
