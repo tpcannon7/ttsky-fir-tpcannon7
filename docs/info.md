@@ -20,7 +20,7 @@ You can also include images in this folder and reference them in the markdown. E
         - Truncated multiplier accumulates error across taps due to serial MAC architecture (one multiplier is used across all taps)
         - See the Area–Error Tradeoff section below for a quantified analysis with Sky130A synthesis data
     - **Recommended first test:**
-        - Generate own array of filter coefficients using Python or other online tools (ex. Python scipy firwin function)
+        - Generate own array of filter coefficients using Python or other online tools (ex. Python SciPy firwin function)
         - Load coefficients over SPI
         - Send impulse response (impulse is equal to 2047 which is max positive value at 12 bit signed)
         - Verify outputs match within an acceptable range to loaded filter coefficients (acceptable range is around 1-2 integer steps, you may load a coefficient of -5 but receive back an output of -6)
@@ -170,4 +170,4 @@ The DUT step response (red) vs Python lfilter (blue). The FIR fills in over 36 t
 
 ![Frequency Response](impulse_freq_response.png)
 
-The frequency response of the 12-bit fixed-point model used in the DUT (Q12.0 samples, Q1.11 coefficients) vs the Python ideal model (floating-point). Frequency response generated with 50-60KHz band-pass coefficients.
+50-60KHz band-pass frequency response, reconstructed from measured impulse response test

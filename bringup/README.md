@@ -3,12 +3,12 @@
 - FPGA configured @ 40 MHz to match the ASIC design target
 
 ## Validation Setup Block Diagram
-- Python pyserial communicates over the ST-LINK COM port of STM32 to drive coefficients/samples
+- Python pySerial communicates over the ST-LINK COM port of STM32 to drive coefficients/samples
 - STM32 acts as the SPI master to the FPGA to transfer coefficients/samples
 - FPGA emulates the ASIC RTL, processes samples and sends back over SPI to the STM32
 
 ```
-Python (pyserial, numpy, scipy)
+Python (pySerial, NumPy, SciPy)
    │
 UART
    │
@@ -40,7 +40,7 @@ Python
 - The `FIR_MODE` pin was verified by alternating coefficient and sample transfers and observing the expected filter behavior
 
 ### FIR Functionality
-- FPGA outputs were compared with a Python scipy lfilter model using the exact same coefficients, lfilter model used floating point coefficients while the FPGA used the fixed point format (Q1.11 coefficients, Q12.0 samples)
+- FPGA outputs were compared with a Python SciPy lfilter model using the exact same coefficients, lfilter model used floating point coefficients while the FPGA used the fixed point format (Q1.11 coefficients, Q12.0 samples)
 - FPGA output closely followed the Python model with reasonable bounded error (show in the below plot)
 
 ### FPGA Sinusoid Filtering vs. Python lfilter Model
@@ -58,6 +58,7 @@ Python
     - Gowin Synthesis appeared to handle procedural combinational assignments differently than Yosys did during gate-level simulation
 - The revised implementation matched the Python reference model and increased the maximum operating frequency from 24 MHz to 61 MHz while reducing LUT utilization
 - Revised implementation of the truncated multiplier at `fpga/src/new_trunc_mult.v`
+- To verify functional equivalence, both the original and revised multipliers were synthesized and tech-mapped using Yosys and the Sky130A HD library. Both implementations produced identical mapped gate counts, confirming that they describe the same RTL logic for the ASIC flow
 
 | FPGA Statistics    |  Original Multiplier |   Revised Multiplier |
 | -------------------| --------------------:| --------------------:|

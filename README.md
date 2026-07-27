@@ -12,6 +12,8 @@
     - [General Operation](docs/info.md#general-operation)
     - [SPI Overview](docs/info.md#spi-overview)
     - [Truncated Baugh-Wooley Multiplier Design](docs/info.md#truncated-baugh-wooley-multiplier-design)
+  - Verified operation using Gowin GW5A FPGA and STM32 Nucleo-F446RE 
+    - FPGA validation uses the same RTL as the ASIC implementation
     - [FPGA Bring-up and Validation](bringup/README.md)
 
 ## Project Structure
@@ -23,7 +25,7 @@
     - `spi.v`: SPI slave interface
     - `control.v`: Small control/routing layer to buffer SPI RX/TX and FIR core I/O
  - `test/`: Cocotb testbenches
-    - `fir_tb.py`: Verifies SPI functionality, impulse/step response, frequency response, and fixed-point output using scipy reference models
+    - `fir_tb.py`: Verifies SPI functionality, impulse/step response, frequency response, and fixed-point output using SciPy reference models
     - `tb_trunc_mult/`: Truncated multiplier tests and cell/area statistics plot generation
  - `docs/`: Project documentation
  - `bringup/`: FPGA hardware validation
@@ -45,31 +47,27 @@
 
 ![GDS 2D Preview](https://tpcannon7.github.io/ttsky-fir-tpcannon7/gds_render.png)
 
-
 ## Truncated Multiplier Area–Error Tradeoff
 
 ![Truncated Multiplier Tradeoff](docs/trunc_mult_tradeoff.png)
 
 The 12×12 truncated multiplier (Baugh-Wooley signed, with Garofalo IC error correction) was synthesized against the Sky130A HD standard cell library across all DropBits parameters. The dashed line at DropBits=8 marks the design point used in the FIR filter.
 
-## Noisy Sinusoid Filtering Comparison
+## Hardware Validation: FPGA vs. Python Reference
+![Noisy Sine Filtering](docs/noisy_sine_fpga.png)
 
-![Noisy Sine Filtering](docs/noisy_sine_comparison.png)
+2KHz sinusoid with added Gaussian noise, filtered with 3KHz low pass coefficients. FPGA output closely matches the floating-point SciPy reference.
 
-*2KHz sinusoid with added Gaussian noise, filtered with 10KHz low pass coefficients*
+## FPGA Error Plot
+![FPGA Error Plot](docs/error_fpga_plot.png)
+Error remains bounded to approximately $\pm$5 LSB relative to the floating-point reference, consistent with the fixed-point arithmetic and truncated multiplier design.
 
-## Impulse Response
-
-![Impulse Response](docs/impulse_response.png)
-
-*50-60 KHz band-pass filter impulse response*
-
-## Step Response
-
-![Step Response](docs/step_response.png)
+## FPGA Hardware Validation Setup
+![FPGA/MCU Setup](docs/fpga_stm32_test_setup.png)
+STM32 Nucleo-F446RE communicating with a Sipeed Tang Primer 25K FPGA over SPI. The FPGA runs the ASIC RTL @ 40 MHz while Python streams coefficients and samples over UART.
 
 ## Frequency Response
 
 ![Frequency Response](docs/impulse_freq_response.png)
 
-*50-60KHz band-pass frequency response*
+50-60KHz band-pass frequency response, computed from the measured impulse response vs. Python SciPy model
