@@ -8,12 +8,13 @@
   - Internal clock @ 40 MHz
     - *~294 kSps @ SCLK = 5 MHz*
   - SKY130 PDK
-  - **See [info.md](docs/info.md) for more information**
+  - **Design Documentation**
     - [General Operation](docs/info.md#general-operation)
     - [SPI Overview](docs/info.md#spi-overview)
     - [Truncated Baugh-Wooley Multiplier Design](docs/info.md#truncated-baugh-wooley-multiplier-design)
-  - Verified operation using Gowin GW5A FPGA and STM32 Nucleo-F446RE 
-    - FPGA validation uses the same RTL as the ASIC implementation
+  - **Hardware Validation**
+    - Verified operation using Gowin GW5A FPGA and STM32 Nucleo-F446RE
+    - FPGA validation uses the same RTL used for the ASIC implementation
     - [FPGA Bring-up and Validation](bringup/README.md)
 
 ## Project Structure
@@ -60,10 +61,12 @@ The 12×12 truncated multiplier (Baugh-Wooley signed, with Garofalo IC error cor
 
 ## FPGA Error Plot
 ![FPGA Error Plot](docs/error_fpga_plot.png)
+
 Error remains bounded to approximately ±5 LSB relative to the floating-point reference, consistent with the fixed-point arithmetic and truncated multiplier design.
 
 ## FPGA Hardware Validation Setup
 ![FPGA/MCU Setup](docs/fpga_stm32_test_setup.png)
+
 STM32 Nucleo-F446RE communicating with a Sipeed Tang Primer 25K FPGA over SPI. The FPGA runs the ASIC RTL @ 40 MHz while Python streams coefficients and samples over UART.
 
 ## Frequency Response
