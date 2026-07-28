@@ -28,3 +28,5 @@ module tb_trunc_mult #(
   endgenerate
 
 endmodule
+
+`default_nettype wire

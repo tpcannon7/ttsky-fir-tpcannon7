@@ -1,7 +1,7 @@
 import cocotb
-from cocotb.triggers import RisingEdge, FallingEdge, Timer, ClockCycles, Combine, ValueChange
+from cocotb.triggers import RisingEdge, FallingEdge, Timer, ClockCycles
 from cocotb.clock import Clock
-from scipy.signal import firwin, lfilter, chirp, freqz
+from scipy.signal import firwin, lfilter, freqz
 import numpy as np
 import matplotlib.pyplot as plt
 import math
@@ -9,8 +9,8 @@ import os
 
 # clock period (ns)
 clock_period = 25 # 40 MHz
-# spi clock of 1-4mhz requires 2 NOP frames
-# spi clock 5 MHz < (not sure bounds) requires 4+ nop frames
+# spi clock of 1-5mhz requires 2 NOP frames
+
 spi_clock_period = 200 # ~5 MHz
 spi_frame_len = 16
 nop_frames = 2
@@ -131,8 +131,6 @@ class SPIinterface:
 
             for bit_idx in range(spi_frame_len):
                 if cs_high_flag and bit_idx == cs_high_bit:
-                    label = "coeff" if mode == 0 else "samples"
-                    # cocotb.log.info(f"CS_N HIGH @ bit {bit_idx} of {label} {idx} = {data[idx]}")
                     self.dut.spi_cs_n.value = 1
                     self.sclk.stop()
                     await Timer(self.spi_clock_period, "ns")
@@ -222,10 +220,11 @@ async def test_impulse_response(dut):
     plt.title("Impulse Response: DUT vs. Python Model")
     plt.legend()
 
-    try:
-        plt.savefig('impulse_response.png')
-    except OSError as e:
-        cocotb.log.warning(f"Failed to save impulse_response plot: {e}")
+    if (os.getenv("FIR_GEN_PLOTS") is not None):
+        try:
+            plt.savefig('impulse_response.png')
+        except OSError as e:
+            cocotb.log.warning(f"Failed to save impulse_response plot: {e}")
 
     plt.close(fig)
 
@@ -238,6 +237,7 @@ async def test_impulse_response(dut):
     phase_dut = np.angle(h_dut)
     phase_true = np.angle(h_true)
 
+    fig = plt.figure()
     plt.subplot(2, 1, 1)
     plt.title("Frequency Response of DUT vs. Python Model")
     plt.plot(w_dut, mag_dut, 'r-', label="DUT", linewidth=1)
@@ -254,12 +254,13 @@ async def test_impulse_response(dut):
     plt.legend()
     plt.tight_layout()
 
-    try:
-        plt.savefig('impulse_freq_response.png')
-    except OSError as e:
-        cocotb.log.warning(f"Failed to save freq_response plot: {e}")
+    if (os.getenv("FIR_GEN_PLOTS") is not None):
+        try:
+            plt.savefig('impulse_freq_response.png')
+        except OSError as e:
+            cocotb.log.warning(f"Failed to save freq_response plot: {e}")
 
-    plt.close()
+    plt.close(fig)
 
 @cocotb.test()
 async def test_negative_impulse_response(dut):
@@ -303,7 +304,6 @@ async def test_step_response(dut):
     # fixed point
     coeffs = h * normalize
     coeffs = [max(min_val, min(max_val, int(round(c)))) for c in coeffs]
-    coeffs_float = [c / float(normalize) for c in coeffs]
     cocotb.log.info(f"fixed coeffs = {coeffs}")
 
     # step response
@@ -329,8 +329,8 @@ async def test_step_response(dut):
     cocotb.log.info(f"exp = {expected}")
 
     for idx, v in enumerate(out):
-        assert abs(out[idx] - y_lfilter_int[idx]) <= 30, \
-            f"Step mismatch at sample {idx}: DUT={out[idx]} python={y_lfilter_int[idx]}"
+        assert abs(v - y_lfilter_int[idx]) <= 30, \
+            f"Step mismatch at sample {idx}: DUT={v} python={y_lfilter_int[idx]}"
 
     plt.figure()
     plt.plot(y_lfilter_int, 'b.--', label='python lfilter', linewidth=1.5)
@@ -340,10 +340,11 @@ async def test_step_response(dut):
     plt.title("Step Response: DUT vs. Python Model")
     plt.legend()
 
-    try:
-        plt.savefig('step_response.png')
-    except OSError as e:
-        cocotb.log.warning(f"Failed to save step_response plot: {e}")
+    if (os.getenv("FIR_GEN_PLOTS") is not None):
+        try:
+            plt.savefig('step_response.png')
+        except OSError as e:
+            cocotb.log.warning(f"Failed to save step_response plot: {e}")
 
     plt.close()
     
@@ -401,20 +402,20 @@ async def test_noisy_sine(dut):
     plt.title("Noisy Sinusoid Filtering: DUT vs. Python model")
     plt.legend()
 
-    try:
-        plt.savefig('noisy_sine_comparison.png')
-    except OSError as e:
-        cocotb.log.warning(f"Failed to save noisy_sine plot: {e}")
+    if (os.getenv("FIR_GEN_PLOTS") is not None):
+        try:
+            plt.savefig('noisy_sine_comparison.png')
+        except OSError as e:
+            cocotb.log.warning(f"Failed to save noisy_sine plot: {e}")
 
     plt.close()
 
     gold_rms = math.sqrt(sum(x**2 for x in y_lfilter) / len(y_lfilter))
-    dut_rms = math.sqrt(sum(x**2 for x in y_dut) / len(y_dut))
     err_rms = math.sqrt(sum((g - d)**2 for g, d in zip(y_lfilter, y_dut)) / len(y_dut))
-    snr = 20.0 * math.log10(gold_rms / err_rms)
+    sqnr = 20.0 * math.log10(gold_rms / err_rms)
 
-    assert snr > 30.0, f"SNR = {snr} below acceptable threshold"
-    cocotb.log.info(f"SNR = {snr}")
+    assert sqnr > 30.0, f"SQNR = {sqnr} below acceptable threshold"
+    cocotb.log.info(f"SQNR = {sqnr}")
 
 @cocotb.test()
 async def test_switching_inputs(dut):
@@ -488,7 +489,7 @@ async def test_non_symmetric_coeff(dut):
         assert abs(out- coeffs[idx]) <= 5, f"{out} != {coeffs[idx]}, order incorrect"
 
 # skippable test using FIR_TB_OPTIONAL env flag
-# meant to show it is possible to reload coeffcients mid sample; would
+# meant to show it is possible to reload coefficients mid sample; would
 # not use this in practice it is meant to stress test the system
 @cocotb.test(skip=os.getenv("FIR_TB_OPTIONAL") is None)
 async def test_load_coeffs_mid_sample_drive(dut):
@@ -581,7 +582,6 @@ async def test_cs_n_assert_mid_frame(dut):
     samples_out = samples_out[nop_frames:]
 
     cocotb.log.info(f"coeffs = {coeffs}")
-    # cocotb.log.info(f"coeffs out = {coeffs_outputs}")
     cocotb.log.info(f"samples_out = {samples_out}")
 
     for idx,o in enumerate(samples_out):
@@ -591,8 +591,6 @@ async def test_cs_n_assert_mid_frame(dut):
 async def test_coeff_reload(dut):
     clk = Clock(dut.clk, clock_period, "ns")
     cocotb.start_soon(clk.start())
-    
-    sclk = Clock(dut.spi_clock, spi_clock_period, "ns")
     
     spi = SPIinterface(spi_clock_period, dut)
 
@@ -660,7 +658,7 @@ async def test_overflow(dut):
     outputs = outputs[nop_frames:]
 
     for idx,n in enumerate(outputs):
-        assert abs(n - y_lfilter_int[idx]) <= 5, f"{n} != ylfilter={y_lfilter_int[idx]}, overflow occured"
+        assert abs(n - y_lfilter_int[idx]) <= 5, f"{n} != ylfilter={y_lfilter_int[idx]}, overflow occurred"
     
     assert outputs[-1] == max_val, f"{outputs[-1]} is not the saturated max_val of {max_val}"
 
@@ -690,7 +688,7 @@ async def test_underflow(dut):
     outputs = outputs[nop_frames:]
 
     for idx,n in enumerate(outputs):
-        assert abs(n - y_lfilter_int[idx]) <= 5, f"{n} != ylfilter={y_lfilter_int[idx]}, overflow occured"
+        assert abs(n - y_lfilter_int[idx]) <= 5, f"{n} != ylfilter={y_lfilter_int[idx]}, underflow occurred"
     
     assert outputs[-1] == min_val, f"{outputs[-1]} is not the saturated min_val of {min_val}"
     

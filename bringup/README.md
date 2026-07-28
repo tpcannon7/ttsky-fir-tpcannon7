@@ -3,7 +3,7 @@
 - FPGA configured @ 40 MHz to match the ASIC design target
 
 ## Validation Setup Block Diagram
-- Python pySerial communicates over the ST-LINK COM port of STM32 to drive coefficients/samples
+- Python pySerial communicates over the ST-LINK COM port of STM32 to drive coefficients/samples; Python file at `stm32/stm32_serial_interface.py`
 - STM32 acts as the SPI master to the FPGA to transfer coefficients/samples
 - FPGA emulates the ASIC RTL, processes samples and sends back over SPI to the STM32
 
@@ -47,17 +47,18 @@ Python
 ![FPGA Sinusoid Filtering](../docs/noisy_sine_fpga.png)
 - FPGA outputs closely follow the Python model, confirming the FIR core/multiplier -> control -> SPI interface all work as expected
 
-### FPGA error vs. Python lfilter Model
+### FPGA Error vs. Python lfilter Model
 ![FPGA Error Plot](../docs/error_fpga_plot.png)
-- Error remained bounded to approximately ±5 LSBs with respect to the floating point reference, confirming the truncated multiplier and fixed-point representation are within a reasonable threshold
-
+- Maximum absolute error relative to the floating-point SciPy reference was **4.81 output LSBs**.
+- Mean error was **−2.27 output LSBs**, with an RMS error of **2.47 output LSBs**.
+- The observed error is consistent with the expected quantization and truncation error introduced by the Q1.11 fixed-point representation and truncated multiplier
 
 ## Issues Encountered
 - During FPGA validation, the original custom truncated multiplier passed RTL and gate-level simulation but produced incorrect behavior after Gowin synthesis
 - The implementation was rewritten using equivalent continuous combinational assignments in place of procedural combinational logic
     - Gowin Synthesis appeared to handle procedural combinational assignments differently than Yosys did during gate-level simulation
 - The revised implementation matched the Python reference model and increased the maximum operating frequency from 24 MHz to 61 MHz while reducing LUT utilization
-- Revised implementation of the truncated multiplier at `fpga/src/new_trunc_mult.v`
+- Revised implementation of the truncated multiplier at `fpga/gw5a/src/new_trunc_mult.v`
 - Functional equivalence between the original and revised RTL implementations was formally verified using Yosys equivalence checking, confirming that the RTL rewrite preserves the original design's functionality while improving compatibility with the Gowin synthesis flow
 - Yosys equivalence script located at `fpga/trunc_mult_equiv.tcl`
 

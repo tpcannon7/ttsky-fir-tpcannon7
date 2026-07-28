@@ -99,7 +99,7 @@ module spi (
   end
 
   reg [SpiFrameWidth-1:0] rx_buf, tx_buf;
-  // bit count needs to hold 1-16 since we increment on first sclk cycle from
+  // bit count needs to hold 1-16 since we increment on first sclk cycle from 
   // 0-1 and miss the final bit if we count to 15 (only 14 bits with counter 1-15)
   reg [$clog2(SpiFrameWidth):0] bit_cnt;
   reg curr_frame_fir_mode_reg;

@@ -17,6 +17,7 @@ You can also include images in this folder and reference them in the markdown. E
         - When generating coefficient vector, ensure you multiply each floating point coefficient by $2^{11}$ and round to the nearest whole number to match Q1.11 input range of [-2048, 2047] for 12-bit signed integers
         - Coefficients are not required to be symmetric, allowing both linear-phase and non-linear-phase FIR filters to be implemented
     - Coefficients must be loaded in **reverse order** (last tap first) due to the coefficient shift register architecture
+        - Your coefficient vector `[c35, c34, ..., c1, c0]` should be sent over SPI as `c0, c1, ..., c34, c35`
     - There is an expected amount of error due to the fixed point representation and truncated multiplier precision
         - Truncated multiplier accumulates error across taps due to serial MAC architecture (one multiplier is used across all taps)
         - See the Area–Error Tradeoff section below for a quantified analysis with Sky130A synthesis data
@@ -37,11 +38,10 @@ You can also include images in this folder and reference them in the markdown. E
 - Validation methodology and measured results are documented in `bringup/README.md`
 
 ## SPI Overview
-
   - System clock is 40 MHz, recommended SCLK $\leq$ ~4-5 MHz
   - 16 bit frames; MSB leading, remaining lower bits padded with 0's
     - With 16 bit frames @ SCLK = 5 MHz, the sampling rate is about:
-        - Total SPI frame time = 200ns per bit * 16 bits + cs_n high between frames = 3400ns -> 294 kSps / 2 (Nyquist) = 147 KHz maximum theoretical recoverable signal frequency; real-world maximum will land slightly below
+        - Total SPI frame time = 200ns per bit * 16 bits + cs_n high between frames = 3400ns -> 294 kSps / 2 (Nyquist) = 147 kHz maximum theoretical recoverable signal frequency; real-world maximum will land slightly below
   - SPI Mode 0 only
   - MISO is driven LOW during idle, not tri-stated; do not share MISO line with other SPI slaves unless externally isolated or muxed
   - CS_N high time between frames must be one cycle of SCLK, (For 5 MHz, CS_N high between frames should be 200ns)
@@ -53,13 +53,27 @@ You can also include images in this folder and reference them in the markdown. E
  - Safe operation of filter assumes SPI clock within documented ranges, there is no backpressure/overrun control if you operate above recommended ranges
 
 ### SPI Output Timing
-  - For a selected SPI clock, there is a required number of leading don't care frames at the beginning of a sample batch and trailing NOP sample (0x0000) frames required to drain the FIR output buffer
-     - Duplex transmission of SPI overlaps with the FIR compute time leading to FIR results for sample N on begin available on MISO on sample N+k input frames
-     - SPI clock speeds of 2-4MHz have a k=2 where the first two frames of the initial SPI startup will contain useless/garbage MISO data, and requires k NOP frames at end of sample batch transmission to drain output pipeline
-     - SPI clock speed of 1MHz (lowest tested range) has k=1
-     - Ex. At SCLK = 3MHz, you want to send [0x1000, 0x2000, 0x3000, 0x4000]
-        - Sample 0x1000's result finishes computing in Sample 0x2000's input frame but is TRANSMITTED on MISO the following frame of Sample 0x3000. This is the k=2 leading don't care frames. The output on MISO during samples 0x1000 and 0x2000 will be unrelated to those samples
-        - The other side of it is in order to see the FIR output results for samples 0x3000 and 0x4000 you must send k=2 NOP frames (0x0000) in order to drain the final results from Samples 0x3000 and 0x4000
+
+- Full duplex SPI interface
+    - MISO returns previous results while you send new samples on MOSI 
+    - This creates a pipeline with a fixed latency:
+
+| SCLK speed | Pipeline lag (k) | Leading garbage frames | Trailing NOPs needed |
+|------------|:---:|:---:|:---:|
+| 2–5 MHz | 2 | First 2 MISO outputs | Send 2 × 0x0000 at end |
+| ≤1 MHz | 1 | First 1 MISO output | Send 1 × 0x0000 at end |
+
+**Example (k=2):** sending `[A, B, C, D, E]` over MOSI:
+
+| Frame | MOSI in | MISO out |
+|-------|---------|----------|
+| 1 | A | garbage |
+| 2 | B | garbage |
+| 3 | C | result of A |
+| 4 | D | result of B |
+| 5 | E | result of C |
+| 6 | 0x0000 | result of D |
+| 7 | 0x0000 | result of E |
 
 ### SPI Timing
 
@@ -67,7 +81,7 @@ Loading Samples:
 ```
 MODE _/¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯\_
 CS_N  \__________________________________________________________________________________/
-SCLK  _/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\/¯\_/¯\_/¯\_/¯\_/¯\_
+SCLK  _/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_/¯\_
 MOSI  X  b15  b14  b13  b12  b11  b10  b9   b8   b7   b6   b5   b4   b3   b2   b1   b0  X
 MISO  X  d15  d14  d13  d12  d11  d10  d9   d8   d7   d6   d5   d4   d3   d2   d1   d0  X
 ```
@@ -151,19 +165,17 @@ The truncated multiplier was synthesized across all DropBits values (0–11) aga
 - ~27% cell savings vs a raw `*` operator synthesized through the same flow (717 cells baseline)
 - FIR output visually indistinguishable from the ideal floating-point reference (see Noisy Sinusoid Filtering below)
 
-
-
 ## Noisy Sinusoid Filtering
 
 ![Noisy Sine Filtering](noisy_sine_comparison.png)
 
-A 2kHz sinusoid with added Gaussian noise filtered by the DUT with low-pass coefficients (10KHz) vs the Python lfilter model.
+A 2kHz sinusoid with added Gaussian noise filtered by the DUT with low-pass coefficients (10 kHz) vs the Python lfilter model.
 
 ## Impulse Response
 
 ![Impulse Response](impulse_response.png)
 
-The DUT output (red) overlaid on the ideal fixed-point coefficients (blue). Generated with 50-60 KHz band-pass coefficients.
+The DUT output (red) overlaid on the ideal fixed-point coefficients (blue). Generated with 50–60 kHz band-pass coefficients.
 
 ## Step Response
 
@@ -175,4 +187,4 @@ The DUT step response (red) vs Python lfilter (blue). The FIR fills in over 36 t
 
 ![Frequency Response](impulse_freq_response.png)
 
-50-60KHz band-pass frequency response, reconstructed from measured impulse response test
+50–60 kHz band-pass frequency response, reconstructed from measured impulse response test

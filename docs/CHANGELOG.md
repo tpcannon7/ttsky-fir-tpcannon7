@@ -1,15 +1,60 @@
 # Changelog
 
-## Uncommitted
+## 2026-07-28 — Docs polish, FPGA bring-up, repo hygiene
 
-- `test/fir_tb.py`: Refactored `test_load_coeffs_mid_sample_drive` — replaced ~140 lines of inline SPI bit-banging with `SPIinterface` calls, added assertions verifying both c1 and c2 impulse responses
-- `test/fir_tb.py`: Gated `test_frequency_response` and `test_load_coeffs_mid_sample_drive` behind `@cocotb.test(skip=os.getenv("FIR_TB_PLOTS") is None)` — default `make -B` skips them
-- `test/Makefile`: `plots` target now passes `FIR_TB_PLOTS=1`, uses `mv -f`
-- `docs/info.md`: Added MISO CS_N-to-SCLK hold time (2 core cycles / 50 ns)
-- `src/trunc_mult.v`: Added IC column Baugh-Wooley constraint comment
-- `README.md`: Added sampling rate line (~294 kSps @ SCLK = 5 MHz)
-- `docs/info.md`: Added CS_N high-time section; updated sampling rate calculation
-- `docs/CHANGELOG.md`, `TODO.md`: Updated for current repo state
+### FPGA Bring-up & Validation
+- **Hardware validation complete**: FPGA (Gowin GW5A) + STM32 Nucleo-F446RE
+  setup running ASIC RTL @ 40 MHz; Python streams coefficients/samples over
+  UART → STM32 → SPI → FPGA (`644bafc`)
+- **Truncated multiplier rewrite for Gowin**: Procedural combinational logic
+  replaced with continuous assignments after Gowin synthesis produced
+  incorrect results vs. Yosys gate-level sim (`1f9dadd`)
+- **Formal equivalence check**: Yosys `equiv_make` proves original and revised
+  `trunc_mult` implementations are functionally identical (`1f9dadd`)
+- **FPGA results**: Revised multiplier: 825 LUTs, 61 MHz Fmax (vs. 999 LUTs,
+  24 MHz). FIR output error: max 4.81 LSB, RMS 2.47 LSB vs. SciPy (`4ee0a5a`)
+- `bringup/README.md`: Validation methodology, block diagram, SPI interface
+  details, issues encountered
+
+### Testbench
+- **Standalone trunc_mult testbench** (`test/tb_trunc_mult/`): Verilator RTL
+  sim + Yosys area sweep across 12 DropBits values, error statistics CSV,
+  area–error plot generation (`162c25b`)
+- **`test_underflow`**: Negative saturation path now tested alongside existing
+  `test_overflow` (`fc8418f`)
+- `SPIinterface` refactor: `test_load_coeffs_mid_sample_drive` replaced
+  inline bit-banging with SPIinterface calls; added assertions for both c1
+  and c2 impulse responses
+- Optional tests gated behind `FIR_TB_OPTIONAL` env var; default `make -B`
+  skips plot-heavy tests
+- All 10 regular + 2 optional tests pass; Verilator lint clean
+
+### Code Quality
+- `default_nettype wire` restored at end of all `.v` files — `src/`,
+  `test/tb.v`, `test/tb_trunc_mult/tb_trunc_mult.v`, `baseline_mult.v`
+- Removed stale `verilator lint_off UNUSEDSIGNAL` on `cs_n_rising` in `spi.v`
+- Fixed tautological assignment in `control.v` (`rx_valid_reg`)
+- All `always` blocks labeled throughout `src/` and `bringup/`
+- IC column Baugh-Wooley constraint comment in `trunc_mult.v`
+
+### Documentation
+- `docs/info.md`: SPI output timing pipeline table replaces prose; coefficient
+  reverse-order example; kHz → kHz; MISO CS_N-to-SCLK hold time
+- `README.md`: Architecture block diagram; project structure updated
+- `test/README.md`: Quick Start Python snippet
+- `docs/README.md`: New file — index of all docs and plots
+- `bringup/README.md`: Fixed stale `fpga/src/` → `fpga/gw5a/src/` paths
+- Plots regenerated with `TEST_SEED=12345`
+
+### Repo Hygiene
+- `.gitattributes`: LF normalization for `.v`, `.py`, `.md`, `.tcl`, `.sh`,
+  `.yaml`, `.json`, `.txt`
+- CRLF → LF in 4 files (`src/fir_filter.v`, `tb_trunc_mult.v`,
+  `new_trunc_mult.v`, `tt_um_tpcannon7_fir.v`)
+- Marked STM32 HAL/CMSIS, CubeMX generated code, and Gowin PLL IP as
+  `linguist-generated`
+- `bringup/fpga/` restructured: `src/` → `gw5a/src/`
+- Dropped `pyserial` from `test/requirements.txt` (bringup-only dep)
 
 ## 2026-07-19 — f6b01fb
 
@@ -18,7 +63,7 @@
 - **System clock 25→40 MHz**: `src/config.json` `CLOCK_PERIOD` 40→25 ns,
   `info.yaml` `clock_hz` 25M→40M
 - **Docs**: `README.md`, `info.yaml`, `docs/info.md` — all tap count and clock
-  references updated; added sampling rate (~294 kSps, ~147 KHz Nyquist) and
+  references updated; added sampling rate (~294 kSps, ~147 kHz Nyquist) and
   CS_N high-time section to `docs/info.md`
 - **Plots**: All 4 response plots regenerated (freq, impulse, step, noisy sine)
 - **Changelog**: Recorded 36-tap / 40-MHz transition

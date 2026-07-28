@@ -22,3 +22,10 @@ TODO.md
 *.csv
 test/tb_trunc_mult/*.png
 bringup/stm32/*.png
+bringup/stm32/nucleo-f446re/Debug
+bringup/stm32/nucleo-f446re/.settings
+bringup/stm32/nucleo-f446re/D-FIR Debug.launch
+bringup/fpga/gw5a/D-FIR.gprj.user
+bringup/fpga/gw5a/impl/*
+bringup/fpga/gw5a/impl/
+sync_projects.sh

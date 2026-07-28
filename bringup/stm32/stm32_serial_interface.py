@@ -130,9 +130,9 @@ def main():
     snr = 20.0 * math.log10(gold_rms / err_rms)
 
     logger.info(f"DUT RMS = {dut_rms}")
-    logger.info(f"SNR = {snr:.2f} dB")
+    logger.info(f"SQNR = {sqnr:.2f} dB")
 
-    # Plot
+    # plot fpga vs. python lfilter overlaid
     fig = plt.figure()
     plt.plot(ts, yraw, "k-", linewidth=0.5, label="Raw")
     plt.plot(ts, y_lfilter, "b--", linewidth=1.5, label="Python")
@@ -146,32 +146,27 @@ def main():
 
     error = (y_fpga - y_lfilter) * normalize
 
+    logger.info(f"Mean error: {np.mean(error)}")
+    logger.info(f"Max abs error: {np.max(np.abs(error))}")
+    logger.info(f"RMSE: {np.sqrt(np.mean(error**2))}")
+
     idx = np.argmax(np.abs(error))
 
-    print("index:", idx)
-    print("error:", error[idx])
+    logger.info(f"index: {idx}")
+    logger.info(f"error: {error[idx]}")
 
     for i in range(idx-3, idx+4):
-        print(i, yraw[i], y_lfilter[i], y_fpga[i])
+        logger.info(f"{i} {yraw[i].astype(float)} {y_lfilter[i].astype(float)} {y_fpga[i].astype(float)}")
 
+    # plot error vs python model
     fig = plt.figure()
     plt.plot(ts, error, "k-", label="Error")
-    plt.title("FPGA error vs. Python lfilter model")
+    plt.title("FPGA Error vs. Python lfilter model")
     plt.xlabel("Time (s)")
-    plt.ylabel("Error")
+    plt.ylabel("Error (output LSBs)")
     plt.legend()
     plt.savefig("error_fpga_plot.png")
     plt.close(fig)
-
-    err0 = np.sqrt(np.mean((y_fpga - y_lfilter)**2))
-
-    # FPGA delayed by 1 sample
-    err1 = np.sqrt(np.mean((y_fpga[:-1] - y_lfilter[1:])**2))
-
-    # FPGA advanced by 1 sample
-    errm1 = np.sqrt(np.mean((y_fpga[1:] - y_lfilter[:-1])**2))
-
-    print(err0, err1, errm1)
 
 
 if __name__ == "__main__":

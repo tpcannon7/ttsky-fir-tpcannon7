@@ -1,6 +1,6 @@
-yosys read_verilog src/trunc_mult.v
+yosys read_verilog gw5a/src/trunc_mult.v
 yosys rename trunc_mult gold
-yosys read_verilog src/new_trunc_mult.v
+yosys read_verilog gw5a/src/new_trunc_mult.v
 yosys rename new_trunc_mult gate
 
 yosys proc

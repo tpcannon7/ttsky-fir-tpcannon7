@@ -21,7 +21,7 @@ module fir_filter #(
   localparam TruncOutWidth = (SampleWidth * 2) - DropBits;
   localparam CoeffFracBits = CoeffWidth - 1;
   localparam OutputWidth = 12;
-  // AccWidth depends on output width from trunc_mult
+  // AccWidth depends on output width from trunc_mult 
   localparam AccWidth = ((SampleWidth + CoeffWidth) - DropBits) + $clog2(Taps);
 
   localparam ModeSample = 1'b1;
@@ -55,7 +55,6 @@ module fir_filter #(
                 output_slice;
 
   localparam [1:0] Ready = 2'b00, Compute = 2'b01, Done = 2'b10;
-
   reg [1:0] curr_st, next_st;
 
   // state machine
@@ -94,9 +93,8 @@ module fir_filter #(
     endcase
   end
 
-  reg signed [CoeffWidth-1:0] coeff[0:Taps-1];
+  reg signed [CoeffWidth-1:0] coeff[0:Taps-1];  /*synthesis syn_preserve = 1*/
   integer c_idx;
-
   always @(posedge clk or negedge rst_n) begin : shift_reg_coeff_line
     if (~rst_n) begin
       for (c_idx = 0; c_idx < Taps; c_idx++) begin
@@ -111,9 +109,8 @@ module fir_filter #(
     end
   end
 
-  reg signed [SampleWidth-1:0] samples[0:Taps-1];
+  reg signed [SampleWidth-1:0] samples[0:Taps-1];  /*synthesis syn_preserve = 1*/
   integer s_idx;
-
   always @(posedge clk or negedge rst_n) begin : shift_reg_sample_line
     if (~rst_n) begin
       for (s_idx = 0; s_idx < Taps; s_idx++) begin
@@ -131,7 +128,6 @@ module fir_filter #(
   reg [$clog2(Taps)-1:0] mac_idx;
   reg mac_busy;
   reg signed [11:0] curr_sample, curr_coeff;
-
   always @(posedge clk or negedge rst_n) begin : reg_mac_curr_sample_coeff
     if (~rst_n) begin
       mac_busy <= 1'b0;
@@ -154,7 +150,6 @@ module fir_filter #(
   end
 
   reg signed [AccWidth-1:0] acc;
-
   always @(posedge clk or negedge rst_n) begin : reg_mac_accumulator
     if (~rst_n) begin
       acc <= 0;
@@ -166,8 +161,7 @@ module fir_filter #(
   end
 
   wire signed [TruncOutWidth-1:0] trunc_out;
-
-  trunc_mult #(
+  new_trunc_mult #(
       .DataWidth(SampleWidth),
       .DropBits (DropBits)
   ) mult (
