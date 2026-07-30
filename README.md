@@ -6,8 +6,8 @@
 - Runtime coefficient reprogramming
   - Supports arbitrary coefficient sets, including symmetric (linear-phase) and asymmetric (non-linear-phase) FIR filters
 - SPI Interface (Mode 0)
-- Internal clock @ 40 MHz
-  - *~294 kSps at 5 MHz SCLK*
+- 40 MHz internal clock
+- ~294 kSps at 5 MHz SCLK
 - **Design Documentation**
   - [General Operation](docs/info.md#general-operation)
   - [SPI Overview](docs/info.md#spi-overview)
