@@ -2,6 +2,7 @@
 
 ## D-FIR: SKY130 FIR Filter ASIC
 
+- Submitted to the Tiny Tapeout SKY26c shuttle
 - 36-tap, 12-bit fixed-point FIR filter
 - Runtime coefficient reprogramming
   - Supports arbitrary coefficient sets, including symmetric (linear-phase) and asymmetric (non-linear-phase) FIR filters
