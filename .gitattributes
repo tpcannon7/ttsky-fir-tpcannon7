@@ -25,7 +25,7 @@ bringup/stm32/nucleo-f446re/STM32F446RETX_FLASH.ld linguist-generated
 bringup/stm32/nucleo-f446re/STM32F446RETX_RAM.ld linguist-generated
 
 # Gowin IP generation
-bringup/fpga/src/gowin_pll/** linguist-generated
-bringup/fpga/src/pll_init.v linguist-generated
+bringup/fpga/gw5a/src/gowin_pll/** linguist-generated
+bringup/fpga/gw5a/src/pll_init.v linguist-generated
 
 

@@ -1,11 +1,11 @@
-# D-FIR FPGA Bring-up and Validation
+# D-FIR Pre-Silicon Validation
 - FIR core, truncated multiplier, and SPI interface validated using an STM32 (Nucleo-F446RE) and Gowin GW5A FPGA (Sipeed Tang Primer 25K - GW5A-LV25MG121NC1/I0)
-- FPGA configured @ 40 MHz to match the ASIC design target
+- FPGA prototype clock configured to 40 MHz to match the ASIC design target
 
 ## Validation Setup Block Diagram
 - Python pySerial communicates over the ST-LINK COM port of STM32 to drive coefficients/samples; Python file at `stm32/stm32_serial_interface.py`
 - STM32 acts as the SPI master to the FPGA to transfer coefficients/samples
-- FPGA emulates the ASIC RTL, processes samples and sends back over SPI to the STM32
+- FPGA implements the ASIC RTL, processes samples and sends back over SPI to the STM32
 
 ```
 Python (pySerial, NumPy, SciPy)
@@ -29,7 +29,7 @@ Python
 ### Image of Validation Test Setup
 ![Test Setup Image](../docs/fpga_stm32_test_setup.png)
 
-##  Validation
+## Validation
 ### SPI Interface
 - SCLK @ 2.625 MHz
 - The STM32 SPI interface was implemented using the STM32 SPI HAL and manual CS toggling to match the expected SPI framing of the RTL
@@ -41,7 +41,7 @@ Python
 
 ### FIR Functionality
 - FPGA outputs were compared with a Python SciPy lfilter model using the exact same coefficients, lfilter model used floating point coefficients while the FPGA used the fixed point format (Q1.11 coefficients, Q12.0 samples)
-- FPGA output closely followed the Python model with reasonable bounded error (show in the below plot)
+- FPGA output closely followed the Python model with reasonable bounded error (shown in the plot below)
 
 ### FPGA Sinusoid Filtering vs. Python lfilter Model
 ![FPGA Sinusoid Filtering](../docs/noisy_sine_fpga.png)
