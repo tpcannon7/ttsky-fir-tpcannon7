@@ -118,7 +118,7 @@ def main():
     y_fpga = y_fpga.astype(np.float64) / normalize
 
     # Keep reference same length
-    y_lfilter[nop_frames:]
+    # dont need to trim y_lfilter; only y_fpga needs trimming to remove initial startup latency
     y_lfilter = y_lfilter[:len(y_fpga)]
     ts = ts[:len(y_fpga)]
     yraw = yraw[:len(y_fpga)]
@@ -127,7 +127,7 @@ def main():
     gold_rms = math.sqrt(np.mean(y_lfilter ** 2))
     dut_rms = math.sqrt(np.mean(y_fpga ** 2))
     err_rms = math.sqrt(np.mean((y_lfilter - y_fpga) ** 2))
-    snr = 20.0 * math.log10(gold_rms / err_rms)
+    sqnr = 20.0 * math.log10(gold_rms / err_rms)
 
     logger.info(f"DUT RMS = {dut_rms}")
     logger.info(f"SQNR = {sqnr:.2f} dB")
