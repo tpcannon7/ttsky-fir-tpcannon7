@@ -20,6 +20,8 @@ test/*.png
 TODO.md
 *.log
 *.csv
+*.pdf
+asic/outputs/*
 test/tb_trunc_mult/*.png
 bringup/stm32/*.png
 bringup/stm32/nucleo-f446re/Debug
