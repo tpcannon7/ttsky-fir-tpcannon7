@@ -117,7 +117,7 @@ report_power -hierarchy all -outfile ./impl_outputs/power.rpt
 saveNetlist ./impl_outputs/d-fir_gpdk045_pnr_netlist.v
 streamOut ./impl_outputs/d-fir_gpdk045.gds \
     -mapFile $MAP_PATH \
-    -merge {$GDS_PATH} \
+    -merge [list $GDS_PATH] \
     -libName DesignLib \
     -structureName tt_um_tpcannon7_fir \
     -units 2000 \
