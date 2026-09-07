@@ -23,9 +23,12 @@ TODO.md
 *.pdf
 *.cmd*
 *.log*
+*.rpt*
 asic/synth_outputs/*
 asic/impl_outputs/*
 asic/fv/*
+asic/timingReports/*
+asic/rc_model.bin
 asic/.rs_tr730351.tstamp
 test/tb_trunc_mult/*.png
 bringup/stm32/*.png
