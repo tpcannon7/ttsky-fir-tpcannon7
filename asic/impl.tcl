@@ -1,6 +1,8 @@
 set OUT_DIR ./impl_outputs
 set TECH_LEF /home/net/local/gsclib045_all_v4.7/gsclib045/lef/gsclib045_tech.lef
 set MACRO_LEF /home/net/local/gsclib045_all_v4.7/gsclib045/lef/gsclib045_macro.lef
+set GDS_PATH /home/net/local/gsclib045_all_v4.7/gsclib045/gds/gsclib045.gds
+set MAP_PATH /home/net/local/gpdk045_v_6_0/soce/streamOut.map
 
 setDesignMode -process 45
 
@@ -62,26 +64,32 @@ checkPlace ./impl_outputs/check_place.rpt
 # CTS
 ccopt_design
 
+# check timing then optimize
 timeDesign -postCTS -outDir ./impl_outputs/postcts_setup
 timeDesign -postCTS -hold -outDir ./impl_outputs/postcts_hold
-
+# setup then hold
 optDesign -postCTS
 optDesign -postCTS -hold
 
 suspend
 
 # routing
-addFiller -cell FILL1 FILL2 FILL4 FILL8 FILL16 FILL32 FILL64 -prefix FILL -fitGap
-addFiller -cell DECAP2 DECAP3 DECAP4 DECAP5 DECAP6 DECAP7 DECAP8 DECAP9 DECAP10 -prefix DECAP -fitGap
-
 routeDesign
 
 setAnalysisMode -analysisType onChipVariation -cppr both
 
+# post-route timing check, then optimize
 timeDesign -postRoute -outDir ./impl_outputs/postroute_setup
 timeDesign -postRoute -hold -outDir ./impl_outputs/postroute_hold
-
 optDesign -postRoute -setup -hold
+optDesign -postRoute -drv
+
+# add fillers
+addFiller -cell FILL1 FILL2 FILL4 FILL8 FILL16 FILL32 FILL64 -prefix FILL -fitGap
+addFiller -cell DECAP2 DECAP3 DECAP4 DECAP5 DECAP6 DECAP7 DECAP8 DECAP9 DECAP10 -prefix DECAP -fitGap
+
+# ecoRoute after adding fillers to fix any issues
+ecoRoute -target
 
 suspend
 
@@ -96,13 +104,22 @@ timeDesign -postRoute -hold -outDir ./impl_outputs/final_hold
 
 setAnalysisMode -checkType setup
 report_timing > ./impl_outputs/setup.rpt
+report_constraint -all_violators > setup_checks.rpt
 
 setAnalysisMode -checkType hold
 report_timing > ./impl_outputs/hold.rpt
+report_constraint -all_violators > hold_checks.rpt
 
 report_area -detail > ./impl_outputs/area.rpt
 report_power -hierarchy all -outfile ./impl_outputs/power.rpt
 
 # write outputs
 saveNetlist ./impl_outputs/d-fir_gpdk045_pnr_netlist.v
+streamOut ./impl_outputs/d-fir_gpdk045.gds \
+    -mapFile $MAP_PATH \
+    -merge {$GDS_PATH} \
+    -libName DesignLib \
+    -structureName tt_um_tpcannon7_fir \
+    -units 2000 \
+    -mode ALL
 

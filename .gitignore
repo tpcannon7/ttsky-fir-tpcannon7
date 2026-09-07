@@ -30,6 +30,7 @@ asic/fv/*
 asic/timingReports/*
 asic/rc_model.bin
 asic/.rs_tr730351.tstamp
+asic/summaryReport/*
 test/tb_trunc_mult/*.png
 bringup/stm32/*.png
 bringup/stm32/nucleo-f446re/Debug
