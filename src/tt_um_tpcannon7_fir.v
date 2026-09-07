@@ -28,9 +28,25 @@ module tt_um_tpcannon7_fir (
   wire spi_curr_frame_fir_mode, spi_rx_valid;
   wire control_curr_frame_mode;
 
+  wire fir_in_ready, fir_out_valid;
+  wire control_in_valid, control_out_ready;
+  wire [11:0] filter_in, filter_out;
+
+  reg [1:0] rst_n_sync;
+  wire internal_rst_n;
+  always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+      rst_n_sync <= 0;
+    end else begin
+      rst_n_sync <= {rst_n_sync[0], 1'b1};
+    end
+  end
+
+  assign internal_rst_n = rst_n_sync[1];
+
   spi spi (
       .clk(clk),
-      .rst_n(rst_n),
+      .rst_n(internal_rst_n),
       .cs_n(uio_in[0]),
       .mosi(uio_in[1]),
       .miso(uio_out[2]),
@@ -42,11 +58,9 @@ module tt_um_tpcannon7_fir (
       .spi_rx_valid(spi_rx_valid)
   );
 
-  wire [11:0] filter_in, filter_out;
-
   control control (
       .clk(clk),
-      .rst_n(rst_n),
+      .rst_n(internal_rst_n),
       .spi_rx_data(spi_rx_data),
       .spi_tx_data(spi_tx_data),
       .dout_fir(filter_out),
@@ -60,14 +74,11 @@ module tt_um_tpcannon7_fir (
       .control_curr_frame_fir_mode(control_curr_frame_mode)
   );
 
-  wire fir_in_ready, fir_out_valid;
-  wire control_in_valid, control_out_ready;
-
   fir_filter #(
       .Taps(Taps)
   ) fir (
       .clk(clk),
-      .rst_n(rst_n),
+      .rst_n(internal_rst_n),
       .din(filter_in),
       .dout(filter_out),
       .mode(control_curr_frame_mode),

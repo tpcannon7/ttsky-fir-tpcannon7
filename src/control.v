@@ -17,6 +17,10 @@ module control (
     output wire control_in_valid,
     output wire control_curr_frame_fir_mode
 );
+  
+  reg [11:0] filter_out_buf, spi_in_buf;
+  reg curr_frame_fir_mode;
+  reg rx_valid_reg;
 
   assign control_in_valid  = rx_valid_reg;
   assign control_out_ready = 1'b1;
@@ -24,10 +28,6 @@ module control (
   wire fir_control_in_handshake, fir_control_out_handshake;
   assign fir_control_in_handshake  = control_in_valid && fir_in_ready;
   assign fir_control_out_handshake = control_out_ready && fir_out_valid;
-
-  reg [11:0] filter_out_buf, spi_in_buf;
-  reg curr_frame_fir_mode;
-  reg rx_valid_reg;
 
   assign din_fir = spi_in_buf;
   assign control_curr_frame_fir_mode = curr_frame_fir_mode;

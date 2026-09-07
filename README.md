@@ -16,6 +16,8 @@
 - **Pre-Silicon Validation**
   - ASIC RTL validated on a Gowin GW5A FPGA and STM32 Nucleo-F446RE
   - [FPGA Bring-up and Validation](bringup/README.md)
+- **Cadence ASIC Implementation (GPDK045)**
+  - [Cadence RTL-to-GDSII](asic/README.md)
 
 ## Architecture
 

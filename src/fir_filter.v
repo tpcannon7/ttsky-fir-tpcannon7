@@ -27,8 +27,10 @@ module fir_filter #(
   localparam ModeSample = 1'b1;
   localparam ModeCoeff = 1'b0;
 
-  assign out_valid = (curr_st == Done);
-  assign in_ready  = (curr_st == Ready);
+  reg [$clog2(Taps)-1:0] mac_idx;
+  reg mac_busy;
+  reg signed [11:0] curr_sample, curr_coeff;
+  wire signed [TruncOutWidth-1:0] trunc_out;
 
   wire out_handshake, in_handshake;
   assign out_handshake = out_ready && out_valid;
@@ -57,6 +59,9 @@ module fir_filter #(
   localparam [1:0] Ready = 2'b00, Compute = 2'b01, Done = 2'b10;
 
   reg [1:0] curr_st, next_st;
+
+  assign out_valid = (curr_st == Done);
+  assign in_ready  = (curr_st == Ready);
 
   // state machine
   always @(posedge clk or negedge rst_n) begin : reg_curr_state
@@ -128,10 +133,6 @@ module fir_filter #(
     end
   end
 
-  reg [$clog2(Taps)-1:0] mac_idx;
-  reg mac_busy;
-  reg signed [11:0] curr_sample, curr_coeff;
-
   always @(posedge clk or negedge rst_n) begin : reg_mac_curr_sample_coeff
     if (~rst_n) begin
       mac_busy <= 1'b0;
@@ -164,8 +165,6 @@ module fir_filter #(
       acc <= acc + {{AccWidth - TruncOutWidth{trunc_out[TruncOutWidth-1]}}, trunc_out};
     end
   end
-
-  wire signed [TruncOutWidth-1:0] trunc_out;
 
   trunc_mult #(
       .DataWidth(SampleWidth),

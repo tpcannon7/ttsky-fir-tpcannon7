@@ -36,6 +36,15 @@ module spi (
   reg [2:0] sclk_sync, cs_n_sync, fir_mode_sync;
   reg [2:0] mosi_sync;
 
+  reg [SpiFrameWidth-1:0] rx_buf, tx_buf;
+  // bit count needs to hold 1-16 since we increment on first sclk cycle from
+  // 0-1 and miss the final bit if we count to 15 (only 14 bits with counter 1-15)
+  reg [$clog2(SpiFrameWidth):0] bit_cnt;
+  reg curr_frame_fir_mode_reg;
+
+  reg [SpiFrameWidth-1:0] tx_safe_buf;
+  reg tx_fetch_ready;
+
   always @(posedge clk or negedge rst_n) begin : reg_sync_flops
     if (~rst_n) begin
       sclk_sync <= 3'b000;
@@ -98,12 +107,6 @@ module spi (
     endcase
   end
 
-  reg [SpiFrameWidth-1:0] rx_buf, tx_buf;
-  // bit count needs to hold 1-16 since we increment on first sclk cycle from
-  // 0-1 and miss the final bit if we count to 15 (only 14 bits with counter 1-15)
-  reg [$clog2(SpiFrameWidth):0] bit_cnt;
-  reg curr_frame_fir_mode_reg;
-
   assign miso = (curr_st == Busy) ? tx_buf[SpiFrameWidth-1] : 1'b0;
   assign rx_data_out = rx_buf[15:4];
 
@@ -129,8 +132,6 @@ module spi (
     end
   end
 
-  reg [SpiFrameWidth-1:0] tx_safe_buf;
-  reg tx_fetch_ready;
   // we save a copy of the incoming tx/fir output
   // we keep this copy so that in case we fail a spi transaction
   // the tx/miso buffer doesn't get overwritten
