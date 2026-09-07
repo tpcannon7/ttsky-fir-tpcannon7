@@ -28,6 +28,10 @@ module tt_um_tpcannon7_fir (
   wire spi_curr_frame_fir_mode, spi_rx_valid;
   wire control_curr_frame_mode;
 
+  wire fir_in_ready, fir_out_valid;
+  wire control_in_valid, control_out_ready;
+  wire [11:0] filter_in, filter_out;
+
   spi spi (
       .clk(clk),
       .rst_n(rst_n),
@@ -41,8 +45,6 @@ module tt_um_tpcannon7_fir (
       .curr_frame_fir_mode(spi_curr_frame_fir_mode),
       .spi_rx_valid(spi_rx_valid)
   );
-
-  wire [11:0] filter_in, filter_out;
 
   control control (
       .clk(clk),
@@ -59,9 +61,6 @@ module tt_um_tpcannon7_fir (
       .control_in_valid(control_in_valid),
       .control_curr_frame_fir_mode(control_curr_frame_mode)
   );
-
-  wire fir_in_ready, fir_out_valid;
-  wire control_in_valid, control_out_ready;
 
   fir_filter #(
       .Taps(Taps)

@@ -21,7 +21,12 @@ TODO.md
 *.log
 *.csv
 *.pdf
-asic/outputs/*
+*.cmd*
+*.log*
+asic/synth_outputs/*
+asic/impl_outputs/*
+asic/fv/*
+asic/.rs_tr730351.tstamp
 test/tb_trunc_mult/*.png
 bringup/stm32/*.png
 bringup/stm32/nucleo-f446re/Debug
